@@ -1,0 +1,68 @@
+const BASE = import.meta.env.VITE_API_URL || "/api";
+
+async function request(path, { method = "GET", body, token } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(BASE + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+export const api = {
+  register: (payload) => request("/auth/register", { method: "POST", body: payload }),
+  login: (payload) => request("/auth/login", { method: "POST", body: payload }),
+  me: (token) => request("/auth/me", { token }),
+  forgotPassword: (email) => request("/auth/forgot-password", { method: "POST", body: { email } }),
+  resetPassword: (payload) => request("/auth/reset-password", { method: "POST", body: payload }),
+  verifyEmail: (payload) => request("/auth/verify-email", { method: "POST", body: payload }),
+  resendOtp: (payload) => request("/auth/resend-otp", { method: "POST", body: payload }),
+
+  createCompany: (payload, token) => request("/companies", { method: "POST", body: payload, token }),
+  updateCompany: (id, payload, token) => request(`/companies/${id}`, { method: "PUT", body: payload, token }),
+  getMyCompany: (token) => request("/companies/mine", { token }),
+  getCompany: (id) => request(`/companies/${id}`),
+  listCompanies: (page = 1, limit = 12) => request(`/companies?page=${page}&limit=${limit}`),
+
+  listJobs: (q, companyId, page = 1, limit = 12) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (companyId) params.set("companyId", companyId);
+    params.set("page", page);
+    params.set("limit", limit);
+    return request(`/jobs?${params}`);
+  },
+  getJob: (jobId) => request(`/jobs/${jobId}`),
+  myJobs: (token) => request("/jobs/mine", { token }),
+  postJob: (payload, token) => request("/jobs", { method: "POST", body: payload, token }),
+  updateJob: (jobId, payload, token) => request(`/jobs/${jobId}`, { method: "PUT", body: payload, token }),
+  deleteJob: (jobId, token) => request(`/jobs/${jobId}`, { method: "DELETE", token }),
+  toggleActiveJob: (jobId, token) => request(`/jobs/${jobId}/toggle-active`, { method: "PATCH", token }),
+  applyToJob: (jobId, payload, token) => request(`/jobs/${jobId}/apply`, { method: "POST", body: payload, token }),
+  applicants: (jobId, token) => request(`/jobs/${jobId}/applicants`, { token }),
+  appliedJobIds: (token) => request("/jobs/mine/applied", { token }),
+  updateApplicationStatus: (jobId, appId, status, token) =>
+    request(`/jobs/${jobId}/applicants/${appId}`, { method: "PATCH", body: { status }, token }),
+  myApplications: (token) => request("/jobs/applications/mine", { token }),
+
+  myConversations: (token) => request("/messages/conversations", { token }),
+  openThread: (jobId, withId, token) => request(`/messages/thread?jobId=${jobId}&with=${withId}`, { token }),
+  conversationMessages: (convId, token) => request(`/messages/${convId}`, { token }),
+  sendMessage: (payload, token) => request("/messages", { method: "POST", body: payload, token }),
+
+  getProfile: (userId, token) => request(`/users/${userId}`, { token }),
+  updateProfile: (payload, token) => request("/users/me/profile", { method: "PUT", body: payload, token }),
+  uploadResume: (payload, token) => request("/users/me/resume", { method: "POST", body: payload, token }),
+  removeResume: (token) => request("/users/me/resume", { method: "DELETE", token }),
+  getResume: (userId, token) => request(`/users/${userId}/resume`, { token }),
+
+  myNotifications: (token) => request("/notifications", { token }),
+  markNotifRead: (id, token) => request(`/notifications/${id}/read`, { method: "PATCH", token }),
+  markAllNotifsRead: (token) => request("/notifications/read-all", { method: "PATCH", token }),
+};
