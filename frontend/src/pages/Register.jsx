@@ -23,7 +23,7 @@ export default function Register() {
     setLoading(true);
     try {
       const user = await register(form);
-      navigate(user.role === "recruiter" ? "/register-company" : "/");
+      navigate("/verify-email");
     } catch (err) {
       setError(err.message);
     } finally {
