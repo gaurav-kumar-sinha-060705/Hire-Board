@@ -12,12 +12,10 @@ import statsRoutes from "./routes/stats.js";
 
 dotenv.config();
 
-if (process.env.NODE_ENV === "production") {
-  const secret = process.env.JWT_SECRET || "";
-  if (!secret || secret === "change-this-to-a-long-random-string" || secret.length < 16) {
-    console.error("JWT_SECRET must be set to a strong value (16+ characters) in production.");
-    process.exit(1);
-  }
+const secret = process.env.JWT_SECRET || "";
+if (!secret || secret === "change-this-to-a-long-random-string" || secret.length < 16) {
+  console.error("JWT_SECRET must be set to a strong value (16+ characters).");
+  process.exit(1);
 }
 
 const app = express();

@@ -12,7 +12,7 @@ const authLimiter = rateLimit(10, "Too many attempts. Wait a minute and try agai
 function sign(user) {
   return jwt.sign(
     { id: user.id, name: user.name, email: user.email, role: user.role },
-    process.env.JWT_SECRET || "dev-secret",
+    process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 }
