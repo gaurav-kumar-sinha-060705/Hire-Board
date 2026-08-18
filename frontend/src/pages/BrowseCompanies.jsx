@@ -6,6 +6,7 @@ export default function BrowseCompanies() {
   const [companies, setCompanies] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -21,15 +22,18 @@ export default function BrowseCompanies() {
 
   useEffect(() => {
     setLoading(true);
-    load(page).finally(() => setLoading(false));
+    setError(null);
+    load(page)
+      .catch(() => setError("Failed to load companies."))
+      .finally(() => setLoading(false));
   }, [page, load]);
 
   const filtered = query
     ? companies.filter(
         (c) =>
           c.name.toLowerCase().includes(query.toLowerCase()) ||
-          c.location.toLowerCase().includes(query.toLowerCase()) ||
-          c.type.toLowerCase().includes(query.toLowerCase())
+          (c.location || "").toLowerCase().includes(query.toLowerCase()) ||
+          (c.type || "").toLowerCase().includes(query.toLowerCase())
       )
     : companies;
 
@@ -50,14 +54,22 @@ export default function BrowseCompanies() {
         />
       </div>
 
-      {filtered.length === 0 && (
+      {!loading && error && (
+        <div className="empty-state">
+          <h3>Something went wrong</h3>
+          <p>{error}</p>
+          <p><button className="btn link" onClick={() => { setLoading(true); setError(null); load(page).catch(() => setError("Failed to load companies.")).finally(() => setLoading(false)); }}>Try again</button></p>
+        </div>
+      )}
+
+      {!loading && !error && filtered.length === 0 && (
         <div className="empty-state">
           <h3>No companies found</h3>
           <p>{query ? "Try a different search." : "No companies registered yet."}</p>
         </div>
       )}
 
-      {filtered.map((c) => (
+      {!error && filtered.map((c) => (
         <Link className="company-card" key={c.id} to={`/company/${c.id}`}>
           <div className="company-card-head">
             <h2 className="company-card-name">{c.name}</h2>
@@ -65,7 +77,7 @@ export default function BrowseCompanies() {
           </div>
           <div className="job-company">{c.location} · {c.type}{c.size ? ` · ${c.size}` : ""}</div>
           {c.description && (
-            <p className="job-desc" style={{ marginTop: 8 }}>
+            <p className="job-desc job-desc-truncated" style={{ marginTop: 8 }}>
               {c.description.length > 160 ? c.description.slice(0, 160).trimEnd() + "…" : c.description}
             </p>
           )}

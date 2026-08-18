@@ -8,6 +8,7 @@ import jobRoutes from "./routes/jobs.js";
 import userRoutes from "./routes/users.js";
 import messageRoutes from "./routes/messages.js";
 import notificationRoutes from "./routes/notifications.js";
+import statsRoutes from "./routes/stats.js";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/stats", statsRoutes);
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

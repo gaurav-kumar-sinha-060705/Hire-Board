@@ -76,8 +76,12 @@ export default function Navbar() {
       <div className="nav-inner">
         <Link to="/" className="nav-brand">Hire Board</Link>
         <div className="nav-links">
-          <Link className={isActive("/")} to="/">Browse Jobs</Link>
-          <Link className={isActive("/companies")} to="/companies">Companies</Link>
+          {user && (
+            <>
+              <Link className={isActive("/browse")} to="/browse">Browse Jobs</Link>
+              <Link className={isActive("/companies")} to="/companies">Companies</Link>
+            </>
+          )}
           {user?.role === "recruiter" && (
             <Link className={isActive("/my-jobs")} to="/my-jobs">My Postings</Link>
           )}
@@ -104,7 +108,7 @@ export default function Navbar() {
                     {notifs.map((n) => (
                       <button key={n.id} className={`notif-item${n.read ? "" : " notif-item-unread"}`} onClick={() => handleNotifClick(n)}>
                         <div className="notif-msg">{n.message}</div>
-                        <div className="notif-time">{new Date(n.createdAt).toLocaleString()}</div>
+                        <div className="notif-time">{new Date(n.created_at).toLocaleString()}</div>
                       </button>
                     ))}
                   </div>

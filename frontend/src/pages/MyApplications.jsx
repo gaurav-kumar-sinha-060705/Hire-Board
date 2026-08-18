@@ -53,13 +53,13 @@ export default function MyApplications() {
             <div className="job-id">{a.job ? jobTicketId(a.job.id) : "—"}</div>
           </div>
           <div className="job-foot">
-            <span className="job-meta">Applied {new Date(a.appliedAt).toLocaleDateString()}</span>
+            <span className="job-meta">Applied {new Date(a.applied_at).toLocaleDateString()}</span>
             <div className="job-actions">
               <span className={statusClass(a.status)}>{statusLabel(a.status)}</span>
               {a.job && (
                 <button
                   className="btn small outline"
-                  onClick={() => navigate(`/messages?job=${a.job.id}&with=${a.job.recruiterId}`)}
+                  onClick={() => navigate(`/messages?job=${a.job.id}&with=${a.job.recruiter_id}`)}
                 >Message recruiter</button>
               )}
             </div>

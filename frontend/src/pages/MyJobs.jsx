@@ -40,7 +40,7 @@ export default function MyJobs() {
     try {
       const data = await api.toggleActiveJob(jobId, token);
       setJobs((list) => list.map((j) => (j.id === jobId ? data.job : j)));
-      showToast(data.job.isActive ? "Posting reopened." : "Posting closed.");
+      showToast(data.job.is_active ? "Posting reopened." : "Posting closed.");
     } catch (err) {
       showToast(err.message);
     }
@@ -79,7 +79,7 @@ export default function MyJobs() {
     setProfileData(null);
     setProfileLoading(true);
     try {
-      const data = await api.getProfile(applicant.seekerId, token);
+      const data = await api.getProfile(applicant.seeker_id, token);
       setProfileData(data.user);
     } catch (err) {
       showToast(err.message);
@@ -121,7 +121,7 @@ export default function MyJobs() {
           </div>
           <div className="job-tags">
             {job.company?.type && <span className="tag">{job.company.type}</span>}
-            {job.isActive === false && <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Closed</span>}
+            {job.is_active === false && <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Closed</span>}
             <span className="tag dark">{job.type}</span>
             <span className="tag">{job.mode}</span>
             {job.salary && <span className="tag">{job.salary}</span>}
@@ -136,7 +136,7 @@ export default function MyJobs() {
               )}
               <button className="btn small outline" onClick={() => navigate(`/post?id=${job.id}`)}>Edit</button>
               <button className="btn small outline" onClick={() => handleToggleActive(job.id)}>
-                {job.isActive === false ? "Reopen" : "Close"}
+                {job.is_active === false ? "Reopen" : "Close"}
               </button>
               <button className="btn small outline danger" onClick={() => setDeleteTarget(job)}>Delete</button>
             </div>
@@ -161,11 +161,11 @@ export default function MyJobs() {
                         <option key={s.value} value={s.value}>{s.label}</option>
                       ))}
                     </select>
-                    <span className="job-meta">{new Date(a.appliedAt).toLocaleDateString()}</span>
+                    <span className="job-meta">{new Date(a.applied_at).toLocaleDateString()}</span>
                     <button className="btn small outline" onClick={() => openProfile(a)}>View profile</button>
                     <button
                       className="btn small outline"
-                      onClick={() => navigate(`/messages?job=${job.id}&with=${a.seekerId}`)}
+                      onClick={() => navigate(`/messages?job=${job.id}&with=${a.seeker_id}`)}
                     >Message</button>
                   </div>
                 </div>

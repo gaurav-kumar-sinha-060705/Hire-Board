@@ -23,7 +23,7 @@ export default function PostJob() {
       api.getJob(editingId).then((d) => {
         setForm({
           title: d.job.title,
-          companyId: d.job.companyId || "",
+          companyId: d.job.company_id || "",
           location: d.job.location,
           type: d.job.type,
           mode: d.job.mode,
@@ -35,11 +35,11 @@ export default function PostJob() {
         setError(err.message);
       }).finally(() => setLoadingJob(false));
     } else if (company) {
-      setForm((f) => ({
-        ...f,
+      setForm({
+        ...initial,
         companyId: company.id,
-        location: f.location || company.location,
-      }));
+        location: company.location,
+      });
     }
   }, [editingId, company]);
 

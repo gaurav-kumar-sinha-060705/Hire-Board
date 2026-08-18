@@ -43,7 +43,7 @@ export default function CompanyProfile() {
           <h1 className="page-title" style={{ fontSize: 26 }}>{company.name}</h1>
           <div className="job-company" style={{ marginTop: 4 }}>{company.location} · {company.type}{company.size ? ` · ${company.size} employees` : ""}</div>
         </div>
-        {user?.role === "recruiter" && user.id === company.recruiterId && (
+        {user?.role === "recruiter" && user.id === company.recruiter_id && (
           <div>
             <Link className="btn small outline" to="/edit-company">Edit company</Link>
           </div>
@@ -87,7 +87,7 @@ export default function CompanyProfile() {
                 {job.salary && <span className="tag">{job.salary}</span>}
               </div>
               <div className="job-foot">
-                <span className="job-meta">Posted {new Date(job.postedAt).toLocaleDateString()}</span>
+                <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
               </div>
             </div>
           ))}

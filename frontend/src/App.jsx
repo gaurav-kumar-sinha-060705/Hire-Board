@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
+import OnboardingGuard from "./components/OnboardingGuard.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import Login from "./pages/Login.jsx";
@@ -19,7 +20,6 @@ import MyApplications from "./pages/MyApplications.jsx";
 import Profile from "./pages/Profile.jsx";
 import Messages from "./pages/Messages.jsx";
 import NotFound from "./pages/NotFound.jsx";
-import VerifyEmail from "./pages/VerifyEmail.jsx";
 
 function RequireRole({ role, children }) {
   const { user, ready } = useAuth();
@@ -32,7 +32,7 @@ function RequireRole({ role, children }) {
 function LandingRedirect() {
   const { user, ready } = useAuth();
   if (!ready) return null;
-  if (user) return <BrowseJobs />;
+  if (user) return <Navigate to="/browse" replace />;
   return <Landing />;
 }
 
@@ -46,19 +46,12 @@ export default function App() {
       <div className="shell">
         <Routes>
           <Route path="/" element={<LandingRedirect />} />
+          <Route path="/browse" element={<BrowseJobs />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route
-            path="/verify-email"
-            element={
-              <RequireRole>
-                <VerifyEmail />
-              </RequireRole>
-            }
-          />
           <Route
             path="/register-company"
             element={
@@ -72,7 +65,9 @@ export default function App() {
             path="/edit-company"
             element={
               <RequireRole role="recruiter">
-                <EditCompany />
+                <OnboardingGuard>
+                  <EditCompany />
+                </OnboardingGuard>
               </RequireRole>
             }
           />
@@ -81,7 +76,9 @@ export default function App() {
             path="/post"
             element={
               <RequireRole role="recruiter">
-                <PostJob />
+                <OnboardingGuard>
+                  <PostJob />
+                </OnboardingGuard>
               </RequireRole>
             }
           />
@@ -89,7 +86,9 @@ export default function App() {
             path="/my-jobs"
             element={
               <RequireRole role="recruiter">
-                <MyJobs />
+                <OnboardingGuard>
+                  <MyJobs />
+                </OnboardingGuard>
               </RequireRole>
             }
           />
@@ -97,7 +96,9 @@ export default function App() {
             path="/applications"
             element={
               <RequireRole role="seeker">
-                <MyApplications />
+                <OnboardingGuard>
+                  <MyApplications />
+                </OnboardingGuard>
               </RequireRole>
             }
           />
@@ -113,7 +114,9 @@ export default function App() {
             path="/messages"
             element={
               <RequireRole>
-                <Messages />
+                <OnboardingGuard>
+                  <Messages />
+                </OnboardingGuard>
               </RequireRole>
             }
           />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
@@ -21,6 +21,7 @@ function formatBytes(bytes) {
 export default function Profile() {
   const { user, token, company, refreshUser } = useAuth();
   const showToast = useToast();
+  const navigate = useNavigate();
   const profile = user?.profile || {};
   const resume = profile.resume || null;
   const isRecruiter = user?.role === "recruiter";
@@ -50,7 +51,7 @@ export default function Profile() {
     try {
       await api.updateProfile({
         headline: form.headline,
-        company: form.company,
+        company: isRecruiter ? (company?.name || "") : form.company,
         location: form.location,
         skills: form.skills.split(","),
         experience: form.experience,
@@ -59,6 +60,7 @@ export default function Profile() {
       }, token);
       await refreshUser();
       showToast("Profile saved.");
+      navigate("/");
     } catch (err) {
       setError(err.message);
     } finally {

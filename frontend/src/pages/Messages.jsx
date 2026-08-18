@@ -188,11 +188,11 @@ export default function Messages() {
                   <div className="inbox-empty">No messages yet. Say hello to start the conversation.</div>
                 )}
                 {messages.map((m) => {
-                  const mine = m.senderId === user.id;
+                  const mine = m.sender_id === user.id;
                   return (
                     <div key={m.id} className={`msg ${mine ? "msg-mine" : ""}`}>
                       <div className="msg-bubble">{m.body}</div>
-                      <div className="msg-time">{timeLabel(m.sentAt)}</div>
+                      <div className="msg-time">{timeLabel(m.sent_at)}</div>
                     </div>
                   );
                 })}

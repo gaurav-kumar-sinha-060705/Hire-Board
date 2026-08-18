@@ -78,6 +78,7 @@ router.get("/applications/mine", authenticate, authorize("seeker"), async (req, 
 router.get("/:id", async (req, res) => {
   const job = await findJobById(Number(req.params.id));
   if (!job) return res.status(404).json({ error: "Job not found." });
+  if (!job.is_active) return res.status(404).json({ error: "This job posting is no longer active." });
 
   const company = job.company_id ? await findCompanyById(job.company_id) : null;
   const { count: appCount } = await getSupabase()
@@ -185,6 +186,7 @@ router.post("/:id/apply", authenticate, authorize("seeker"), async (req, res) =>
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
+  if (!job.is_active) return res.status(400).json({ error: "This job posting is no longer accepting applications." });
 
   const { name, email, note } = req.body;
   if (!name?.trim() || !EMAIL_RE.test(email || "")) {

@@ -25,7 +25,7 @@ export default function JobDetail() {
   useEffect(() => {
     if (user?.role === "seeker" && token) {
       api.myApplications(token).then((d) => {
-        const app = d.applications.find((a) => a.jobId === Number(id));
+        const app = d.applications.find((a) => a.job_id === Number(id));
         setStatus(app ? app.status : null);
       }).catch(() => {});
     } else {
@@ -63,7 +63,7 @@ export default function JobDetail() {
     );
   }
 
-  const isOwner = user?.role === "recruiter" && job.recruiterId === user.id;
+  const isOwner = user?.role === "recruiter" && job.recruiter_id === user.id;
 
   return (
     <div>
@@ -85,13 +85,14 @@ export default function JobDetail() {
 
       <div className="job-tags">
         {job.company?.type && <span className="tag">{job.company.type}</span>}
+        {job.is_active === false && <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Closed</span>}
         <span className="tag dark">{job.type}</span>
         <span className="tag">{job.mode}</span>
         {job.salary && <span className="tag">{job.salary}</span>}
       </div>
 
       <div className="job-foot">
-        <span className="job-meta">Posted {new Date(job.postedAt).toLocaleDateString()}</span>
+        <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
         {isOwner && <span className="job-meta">{job.applicantCount} applicant{job.applicantCount === 1 ? "" : "s"}</span>}
       </div>
 
@@ -136,13 +137,18 @@ export default function JobDetail() {
           {status && (
             <>
               <span className={statusClass(status)}>{statusLabel(status)}</span>
-              <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiterId}`)}>
-                Message recruiter
-              </button>
+              {job.is_active !== false && (
+                <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiter_id}`)}>
+                  Message recruiter
+                </button>
+              )}
             </>
           )}
-          {!status && !isOwner && (
+          {!status && !isOwner && job.is_active !== false && (
             <button className="btn" onClick={handleApplyClick}>Apply now</button>
+          )}
+          {job.is_active === false && !status && !isOwner && (
+            <span className="job-meta">This posting is no longer accepting applications.</span>
           )}
         </div>
       </div>

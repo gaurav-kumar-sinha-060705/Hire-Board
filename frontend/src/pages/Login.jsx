@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { api } from "../api.js";
 
 export default function Login() {
-  const { login, token } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,18 +19,8 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const user = await login({ email, password });
-      if (user.role === "recruiter") {
-        try {
-          const t = localStorage.getItem("hb_token");
-          await api.getMyCompany(t);
-          navigate("/my-jobs");
-        } catch {
-          navigate("/register-company");
-        }
-      } else {
-        navigate("/");
-      }
+      await login({ email, password });
+      navigate("/");
     } catch (err) {
       setError(err.message);
     } finally {

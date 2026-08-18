@@ -49,7 +49,15 @@ export default function EditCompany() {
     }
   }
 
-  if (!form) return null;
+  if (!form) {
+    return (
+      <div className="empty-state">
+        <h3>No company registered</h3>
+        <p>You need a registered company before editing.</p>
+        <p><button className="btn" onClick={() => navigate("/register-company")}>Register company</button></p>
+      </div>
+    );
+  }
 
   return (
     <div>

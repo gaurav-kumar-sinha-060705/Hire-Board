@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../api.js";
 
 const AuthContext = createContext(null);
@@ -9,41 +9,34 @@ export function AuthProvider({ children }) {
   const [company, setCompany] = useState(null);
   const [ready, setReady] = useState(false);
 
-  const fetchCompany = useCallback(async (t) => {
-    if (!t || !user || user.role !== "recruiter") {
-      setCompany(null);
-      return;
-    }
-    try {
-      const data = await api.getMyCompany(t);
-      setCompany(data.company);
-    } catch {
-      setCompany(null);
-    }
-  }, [user?.role]);
-
   useEffect(() => {
     if (!token) {
       setReady(true);
       return;
     }
-    api
-      .me(token)
-      .then((data) => setUser(data.user))
-      .catch(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.me(token);
+        if (cancelled) return;
+        setUser(data.user);
+        if (data.user.role === "recruiter") {
+          try {
+            const companyData = await api.getMyCompany(token);
+            if (!cancelled) setCompany(companyData.company);
+          } catch {
+            if (!cancelled) setCompany(null);
+          }
+        }
+      } catch {
         setToken(null);
         localStorage.removeItem("hb_token");
-      })
-      .finally(() => setReady(true));
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [token]);
-
-  useEffect(() => {
-    if (ready && token && user?.role === "recruiter") {
-      fetchCompany(token);
-    } else {
-      setCompany(null);
-    }
-  }, [ready, token, user?.role, fetchCompany]);
 
   function onAuthed({ token: t, user: u }) {
     localStorage.setItem("hb_token", t);

@@ -176,6 +176,14 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); font-weight: 500; mar
 .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; padding: 5px 10px; border: 1px solid var(--gray-300); color: var(--gray-700); border-radius: 3px; }
 .tag.dark { background: var(--black); color: var(--white); border-color: var(--black); }
 .job-desc { font-size: 14px; line-height: 1.7; color: var(--black); white-space: pre-wrap; margin: 0 0 16px; }
+.job-desc-truncated {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  margin-bottom: 8px;
+}
 .job-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
 .job-actions { display: flex; gap: 10px; }
 .job-meta { font-size: 12px; color: var(--gray-500); }

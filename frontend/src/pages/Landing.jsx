@@ -1,14 +1,26 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { api } from "../api.js";
+
+function formatNum(n) {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
 
 export default function Landing() {
   const { user } = useAuth();
+  const [stats, setStats] = useState({ totalJobs: 0, totalCompanies: 0, totalUsers: 0 });
+
+  useEffect(() => {
+    api.getStats().then(setStats).catch(() => {});
+  }, []);
 
   if (user) return null;
 
   return (
     <div>
-      <section style={{ textAlign: "center", padding: "60px 0 48px" }}>
+      <section style={{ textAlign: "center", padding: "60px 0 32px" }}>
         <div className="eyebrow">Hire Board</div>
         <h1 style={{ fontSize: 42, lineHeight: 1.15, marginTop: 12, maxWidth: 600, marginLeft: "auto", marginRight: "auto" }}>
           Know the company.<br />Before you apply.
@@ -16,11 +28,25 @@ export default function Landing() {
         <p style={{ color: "var(--gray-500)", fontSize: 18, marginTop: 16, maxWidth: 500, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
           India's culture-first hiring platform. Browse real company profiles, see how teams work, and find the right fit — not just the right salary.
         </p>
-        <div style={{ marginTop: 32, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ marginTop: 32 }}>
           <Link className="btn" to="/register" style={{ padding: "12px 28px", fontSize: 15 }}>Get started</Link>
-          <Link className="btn outline" to="/jobs" style={{ padding: "12px 28px", fontSize: 15 }}>Browse jobs</Link>
         </div>
       </section>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 32, padding: "20px 0", borderTop: "1px solid var(--gray-100)", borderBottom: "1px solid var(--gray-100)" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalJobs)}</div>
+          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Job Postings</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalCompanies)}</div>
+          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Companies</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalUsers)}</div>
+          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Users</div>
+        </div>
+      </div>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 20, marginTop: 48 }}>
         <div className="card" style={{ padding: 28 }}>

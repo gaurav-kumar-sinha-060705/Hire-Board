@@ -1,8 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { findUserByEmail, findUserById, createUser, updateUserPassword } from "../db.js";
-import { createEmailOTP, verifyEmailOTP, sendVerificationEmail, sendPasswordResetEmail } from "../email.js";
+import { findUserByEmail, findUserById, createUser } from "../db.js";
 import { authenticate } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
 
@@ -40,13 +39,9 @@ router.post("/register", authLimiter, async (req, res) => {
   const hashed = await bcrypt.hash(password, 10);
   const user = await createUser({ name, email, password: hashed, role });
 
-  const otp = await createEmailOTP(email, user.id, "verify");
-  const emailResult = await sendVerificationEmail(email, otp);
-
   res.status(201).json({
     token: sign(user),
     user: publicUser(user),
-    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
   });
 });
 
@@ -66,73 +61,6 @@ router.get("/me", authenticate, async (req, res) => {
   const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ error: "Account not found." });
   res.json({ user: publicUser(user) });
-});
-
-router.post("/verify-email", authLimiter, async (req, res) => {
-  const { email, otp } = req.body;
-  if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required." });
-
-  const userId = await verifyEmailOTP(email, otp, "verify");
-  if (!userId) return res.status(400).json({ error: "Invalid or expired verification code." });
-
-  const user = await findUserById(userId);
-  res.json({ message: "Email verified successfully.", user: publicUser(user) });
-});
-
-router.post("/resend-otp", authLimiter, async (req, res) => {
-  const { email, purpose } = req.body;
-  if (!email) return res.status(400).json({ error: "Email is required." });
-
-  const user = await findUserByEmail(email);
-  if (!user) return res.status(200).json({ message: "If an account exists, a code has been sent." });
-  if (purpose === "verify" && user.email_verified) return res.status(200).json({ message: "Email is already verified." });
-
-  const otpPurpose = purpose || "verify";
-  const otp = await createEmailOTP(email, user.id, otpPurpose);
-
-  let emailResult;
-  if (otpPurpose === "reset") {
-    emailResult = await sendPasswordResetEmail(email, otp);
-  } else {
-    emailResult = await sendVerificationEmail(email, otp);
-  }
-
-  res.json({
-    message: "Verification code sent.",
-    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
-  });
-});
-
-router.post("/forgot-password", authLimiter, async (req, res) => {
-  const { email } = req.body;
-  const user = await findUserByEmail(email || "");
-
-  if (user) {
-    const otp = await createEmailOTP(user.email, user.id, "reset");
-    const emailResult = await sendPasswordResetEmail(user.email, otp);
-
-    res.json({
-      message: "If an account exists, a reset code has been sent.",
-      ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
-    });
-  } else {
-    res.json({ message: "If an account exists, a reset code has been sent." });
-  }
-});
-
-router.post("/reset-password", authLimiter, async (req, res) => {
-  const { email, otp, password } = req.body;
-  if (!email || !otp || !password) return res.status(400).json({ error: "Email, OTP, and new password are required." });
-  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
-  if (password.length > 128) return res.status(400).json({ error: "Password must be under 128 characters." });
-
-  const userId = await verifyEmailOTP(email, otp, "reset");
-  if (!userId) return res.status(400).json({ error: "Invalid or expired reset code." });
-
-  const hashed = await bcrypt.hash(password, 10);
-  await updateUserPassword(userId, hashed);
-
-  res.json({ message: "Password has been reset. You can now sign in." });
 });
 
 export default router;

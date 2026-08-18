@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -11,11 +11,15 @@ const initial = {
 };
 
 export default function RegisterCompany() {
-  const { token, refreshCompany } = useAuth();
+  const { token, company, refreshCompany } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (company) navigate("/edit-company", { replace: true });
+  }, [company, navigate]);
 
   function update(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -32,7 +36,7 @@ export default function RegisterCompany() {
     try {
       await api.createCompany(form, token);
       await refreshCompany();
-      navigate("/my-jobs");
+      navigate("/profile");
     } catch (err) {
       setError(err.message);
     } finally {

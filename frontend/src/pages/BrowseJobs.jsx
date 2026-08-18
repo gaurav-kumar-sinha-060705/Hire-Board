@@ -16,6 +16,7 @@ export default function BrowseJobs() {
   const [statusByJob, setStatusByJob] = useState({});
   const [applyTarget, setApplyTarget] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -29,7 +30,7 @@ export default function BrowseJobs() {
     if (user?.role === "seeker" && token) {
       api.myApplications(token).then((d) => {
         const map = {};
-        for (const a of d.applications) map[a.jobId] = a.status;
+        for (const a of d.applications) map[a.job_id] = a.status;
         setStatusByJob(map);
       });
     }
@@ -42,7 +43,10 @@ export default function BrowseJobs() {
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true);
-      loadJobs(query, page).finally(() => setLoading(false));
+      setError(null);
+      loadJobs(query, page)
+        .catch(() => setError("Failed to load jobs."))
+        .finally(() => setLoading(false));
     }, query ? 250 : 0);
     return () => clearTimeout(t);
   }, [query, page, loadJobs]);
@@ -81,7 +85,15 @@ export default function BrowseJobs() {
         />
       </div>
 
-      {!loading && jobs.length === 0 && (
+      {!loading && error && (
+        <div className="empty-state">
+          <h3>Something went wrong</h3>
+          <p>{error}</p>
+          <p><button className="btn link" onClick={() => { setLoading(true); setError(null); loadJobs(query, page).catch(() => setError("Failed to load jobs.")).finally(() => setLoading(false)); }}>Try again</button></p>
+        </div>
+      )}
+
+      {!loading && !error && jobs.length === 0 && (
         <div className="empty-state">
           <h3>No jobs found</h3>
           <p>{query ? "Try a different search." : "Check back soon, or post the first role."}</p>
@@ -113,19 +125,19 @@ export default function BrowseJobs() {
               <span className="tag">{job.mode}</span>
               {job.salary && <span className="tag">{job.salary}</span>}
             </div>
-            <p className="job-desc">
+            <p className="job-desc job-desc-truncated">
               {job.description.length > 220 ? job.description.slice(0, 220).trimEnd() + "…" : job.description}
               {job.description.length > 220 && (
                 <Link className="btn link" to={`/jobs/${job.id}`} style={{ marginLeft: 6 }}>Read more</Link>
               )}
             </p>
             <div className="job-foot">
-              <span className="job-meta">Posted {new Date(job.postedAt).toLocaleDateString()}</span>
+              <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
               <div className="job-actions">
                 {applied && (
                   <>
                     <span className={statusClass(status)}>{statusLabel(status)}</span>
-                    <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiterId}`)}>
+                    <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiter_id}`)}>
                       Message recruiter
                     </button>
                   </>
