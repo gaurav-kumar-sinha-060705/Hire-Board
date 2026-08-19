@@ -2,11 +2,12 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { findUserByEmail, findUserById, createUser } from "../db.js";
+import { createEmailOTP, verifyEmailOTP, sendVerificationEmail } from "../email.js";
 import { authenticate } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
+import { EMAIL_RE, publicUser, asyncHandler } from "../utils.js";
 
 const router = Router();
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const authLimiter = rateLimit(10, "Too many attempts. Wait a minute and try again.");
 
 function sign(user) {
@@ -17,12 +18,7 @@ function sign(user) {
   );
 }
 
-function publicUser(user) {
-  const { password, ...rest } = user;
-  return rest;
-}
-
-router.post("/register", authLimiter, async (req, res) => {
+router.post("/register", authLimiter, asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
 
   if (!name || !name.trim()) return res.status(400).json({ error: "Enter your name." });
@@ -43,9 +39,9 @@ router.post("/register", authLimiter, async (req, res) => {
     token: sign(user),
     user: publicUser(user),
   });
-});
+}));
 
-router.post("/login", authLimiter, async (req, res) => {
+router.post("/login", authLimiter, asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const user = await findUserByEmail(email || "");
@@ -55,12 +51,56 @@ router.post("/login", authLimiter, async (req, res) => {
   if (!ok) return res.status(401).json({ error: "Incorrect email or password." });
 
   res.json({ token: sign(user), user: publicUser(user) });
-});
+}));
 
-router.get("/me", authenticate, async (req, res) => {
+router.get("/me", authenticate, asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ error: "Account not found." });
   res.json({ user: publicUser(user) });
-});
+}));
+
+router.post("/verify-email", authLimiter, asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ error: "Email and OTP are required." });
+
+  const userId = await verifyEmailOTP(email, otp, "verify");
+  if (!userId) return res.status(400).json({ error: "Invalid or expired verification code." });
+
+  const user = await findUserById(userId);
+  if (!user) return res.status(400).json({ error: "Invalid or expired verification code." });
+  const { password, ...rest } = user;
+  res.json({ message: "Email verified successfully.", user: rest });
+}));
+
+router.post("/resend-otp", authLimiter, asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required." });
+
+  const user = await findUserByEmail(email);
+  if (!user) return res.status(200).json({ message: "If an account exists, a code has been sent." });
+  if (user.email_verified) return res.status(200).json({ message: "Email is already verified." });
+
+  let otp;
+  try {
+    otp = await createEmailOTP(email, user.id, "verify");
+  } catch (err) {
+    return res.status(429).json({ error: err.message });
+  }
+
+  const emailResult = await sendVerificationEmail(email, otp);
+
+  if (emailResult.limited) {
+    return res.status(429).json({ error: "Daily email limit reached. Try again tomorrow." });
+  }
+
+  if (emailResult.bounced) {
+    return res.status(502).json({ error: "Email delivery failed. Please try a different email address or contact support." });
+  }
+
+  res.json({
+    message: "Verification code sent.",
+    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
+  });
+}));
 
 export default router;

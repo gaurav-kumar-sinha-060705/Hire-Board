@@ -22,12 +22,8 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      const user = await register(form);
-      if (user.role === "recruiter") {
-        navigate("/register-company");
-      } else {
-        navigate("/profile");
-      }
+      await register(form);
+      navigate("/browse");
     } catch (err) {
       setError(err.message);
     } finally {

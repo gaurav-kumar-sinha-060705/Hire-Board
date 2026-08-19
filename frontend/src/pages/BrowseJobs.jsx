@@ -32,7 +32,7 @@ export default function BrowseJobs() {
         const map = {};
         for (const a of d.applications) map[a.job_id] = a.status;
         setStatusByJob(map);
-      });
+      }).catch(() => {});
     }
   }, [user, token]);
 
@@ -60,14 +60,38 @@ export default function BrowseJobs() {
       showToast("Sign in as a job seeker to apply.");
       return;
     }
+    if (!user.email_verified) {
+      showToast("Verify your email to apply.");
+      navigate("/verify-email");
+      return;
+    }
+    if (!user.profile?.headline || !user.profile?.skills || user.profile.skills.length === 0) {
+      showToast("Complete your profile to apply.");
+      navigate("/profile");
+      return;
+    }
     setApplyTarget(job);
   }
 
   async function submitApplication(payload) {
-    await api.applyToJob(applyTarget.id, payload, token);
-    setStatusByJob((m) => ({ ...m, [applyTarget.id]: "applied" }));
-    setApplyTarget(null);
-    showToast("Application submitted.");
+    try {
+      await api.applyToJob(applyTarget.id, payload, token);
+      setStatusByJob((m) => ({ ...m, [applyTarget.id]: "applied" }));
+      setApplyTarget(null);
+      showToast("Application submitted.");
+    } catch (err) {
+      if (/verify/i.test(err.message)) {
+        setApplyTarget(null);
+        showToast("Verify your email to apply.");
+        navigate("/verify-email");
+      } else if (/profile/i.test(err.message)) {
+        setApplyTarget(null);
+        showToast("Complete your profile to apply.");
+        navigate("/profile");
+      } else {
+        throw err;
+      }
+    }
   }
 
   return (
@@ -134,13 +158,16 @@ export default function BrowseJobs() {
             <div className="job-foot">
               <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
               <div className="job-actions">
-                {applied && (
+                {applied && (status === "shortlisted" || status === "accepted") && (
                   <>
                     <span className={statusClass(status)}>{statusLabel(status)}</span>
                     <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiter_id}`)}>
                       Message recruiter
                     </button>
                   </>
+                )}
+                {applied && status !== "shortlisted" && status !== "accepted" && (
+                  <span className={statusClass(status)}>{statusLabel(status)}</span>
                 )}
                 {!applied && (
                   <button className="btn small" onClick={() => handleApplyClick(job)}>Apply now</button>

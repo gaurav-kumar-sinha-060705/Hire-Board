@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase.js";
+import { profileSummary } from "./utils.js";
 
 // ── Users ──────────────────────────────────────────────
 
@@ -8,7 +9,11 @@ export async function findUserByEmail(email) {
 }
 
 export async function findUserById(id) {
-  const { data } = await getSupabase().from("users").select("*").eq("id", id).maybeSingle();
+  const { data } = await getSupabase()
+    .from("users")
+    .select("id, name, email, role, profile, email_verified, created_at")
+    .eq("id", id)
+    .maybeSingle();
   return data;
 }
 
@@ -30,11 +35,6 @@ export async function updateUserPassword(userId, hashedPassword) {
 export async function updateUserProfile(userId, profile) {
   const { error } = await getSupabase().from("users").update({ profile }).eq("id", userId);
   if (error) throw error;
-}
-
-export async function getUserProfile(userId) {
-  const { data } = await getSupabase().from("users").select("profile").eq("id", userId).maybeSingle();
-  return data?.profile || {};
 }
 
 // ── Companies ──────────────────────────────────────────
@@ -71,15 +71,23 @@ export async function updateCompany(id, { name, location, type, description, web
   return data;
 }
 
-export async function listCompanies({ page, limit }) {
+export async function listCompanies({ q, page, limit }) {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  const { data: companies, count } = await getSupabase()
+  let query = getSupabase()
     .from("companies")
     .select("*", { count: "exact" })
-    .order("id", { ascending: false })
-    .range(from, to);
+    .order("id", { ascending: false });
+
+  if (q) {
+    const pattern = `%${q}%`;
+    query = query.or(`name.ilike.${pattern},location.ilike.${pattern},type.ilike.${pattern}`);
+  }
+
+  query = query.range(from, to);
+
+  const { data: companies, count } = await query;
 
   const companiesWithCounts = await Promise.all(
     (companies || []).map(async (c) => {
@@ -330,6 +338,42 @@ export async function getApplicantDetails(jobId) {
   );
 }
 
+export async function getShortlistedByCompany(companyId) {
+  const { data: jobs } = await getSupabase()
+    .from("jobs")
+    .select("id")
+    .eq("company_id", companyId);
+
+  if (!jobs || jobs.length === 0) return [];
+
+  const jobIds = jobs.map((j) => j.id);
+
+  const { data: apps } = await getSupabase()
+    .from("applications")
+    .select("*")
+    .in("job_id", jobIds)
+    .in("status", ["shortlisted", "accepted"]);
+
+  return Promise.all(
+    (apps || []).map(async (a) => {
+      const seeker = await findUserById(a.seeker_id);
+      if (!seeker) return null;
+      const profile = seeker.profile || {};
+      const job = await findJobById(a.job_id);
+      return {
+        id: seeker.id,
+        name: seeker.name,
+        headline: profile.headline || "",
+        location: profile.location || "",
+        skills: profile.skills || [],
+        bio: profile.bio || "",
+        status: a.status,
+        jobTitle: job?.title || "Deleted posting",
+      };
+    })
+  );
+}
+
 // ── Conversations ──────────────────────────────────────
 
 export async function findConversation(jobId, userA, userB) {
@@ -481,6 +525,9 @@ export async function findPasswordReset(token) {
     .eq("token", token)
     .gt("expires_at", Date.now())
     .maybeSingle();
+  if (!data) {
+    await getSupabase().from("password_resets").delete().lt("expires_at", Date.now());
+  }
   return data;
 }
 
@@ -490,11 +537,4 @@ export async function deletePasswordReset(token) {
 
 export async function cleanExpiredResets() {
   await getSupabase().from("password_resets").delete().lt("expires_at", Date.now());
-}
-
-// ── Helpers ────────────────────────────────────────────
-
-function profileSummary(user) {
-  const p = user?.profile || {};
-  return { headline: p.headline || "", company: p.company || "", location: p.location || "", bio: p.bio || "" };
 }

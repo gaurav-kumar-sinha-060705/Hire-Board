@@ -18,11 +18,17 @@ if (!secret || secret === "change-this-to-a-long-random-string" || secret.length
   process.exit(1);
 }
 
+const frontendUrl = process.env.FRONTEND_URL || "";
+if (!frontendUrl) {
+  console.error("FRONTEND_URL must be set (e.g. http://localhost:5173).");
+  process.exit(1);
+}
+
 const app = express();
 
-const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",") : [];
+const allowedOrigins = process.env.FRONTEND_URL.split(",");
 app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : true,
+  origin: allowedOrigins,
   credentials: true,
 }));
 

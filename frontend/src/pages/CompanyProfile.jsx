@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { statusLabel, statusClass } from "../status.js";
 import { jobTicketId } from "../utils.js";
 
 export default function CompanyProfile() {
@@ -10,14 +11,16 @@ export default function CompanyProfile() {
   const { user } = useAuth();
   const [company, setCompany] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.getCompany(id), api.listJobs("", Number(id))])
-      .then(([compData, jobData]) => {
+    Promise.all([api.getCompany(id), api.listJobs("", Number(id)), api.getCompanyTeam(id)])
+      .then(([compData, jobData, teamData]) => {
         setCompany(compData.company);
         setJobs(jobData.jobs);
+        setTeam(teamData.team || []);
       })
       .catch(() => setCompany(null))
       .finally(() => setLoading(false));
@@ -98,6 +101,30 @@ export default function CompanyProfile() {
         <div className="empty-state" style={{ marginTop: 24 }}>
           <h3>No open positions</h3>
           <p>This company hasn't posted any jobs yet.</p>
+        </div>
+      )}
+
+      {team.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <div className="profile-label">Team on Board ({team.length})</div>
+          {team.map((member) => (
+            <div className="company-info-block" key={member.id} style={{ marginBottom: 12 }}>
+              <div className="company-info-head">
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{member.name}</div>
+                  {member.headline && <div style={{ fontSize: 13, color: "var(--gray-700)" }}>{member.headline}</div>}
+                  {member.location && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>{member.location}</div>}
+                </div>
+                <span className={statusClass(member.status)}>{statusLabel(member.status)}</span>
+              </div>
+              {member.skills?.length > 0 && (
+                <div className="job-tags" style={{ marginTop: 8 }}>
+                  {member.skills.map((s) => <span className="tag" key={s}>{s}</span>)}
+                </div>
+              )}
+              {member.jobTitle && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 8 }}>For: {member.jobTitle}</div>}
+            </div>
+          ))}
         </div>
       )}
     </div>

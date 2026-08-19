@@ -6,43 +6,57 @@ import {
 } from "../db.js";
 import { getSupabase } from "../supabase.js";
 import { authenticate } from "../middleware/auth.js";
+import { profileSummary, asyncHandler } from "../utils.js";
 
 const router = Router();
-
-function profileSummary(user) {
-  const p = user?.profile || {};
-  return { headline: p.headline || "", company: p.company || "", location: p.location || "", bio: p.bio || "" };
-}
 
 function belongsTo(conv, userId) {
   return conv.recruiter_id === userId || conv.seeker_id === userId;
 }
 
-async function canMessagePair(sender, recipient, job) {
-  if (!recipient || recipient.id === sender.id) return false;
-  const seekerId = sender.role === "seeker" ? sender.id : recipient.id;
-  const { count } = await getSupabase()
-    .from("applications").select("*", { count: "exact", head: true })
-    .eq("job_id", job.id).eq("seeker_id", seekerId);
-  if (!count) return false;
-  if (sender.role === "recruiter") return job.recruiter_id === sender.id && recipient.role === "seeker";
-  if (sender.role === "seeker") return job.recruiter_id === recipient.id && recipient.role === "recruiter";
-  return false;
+async function isMessagingAllowed(seekerId, job) {
+  const { data } = await getSupabase()
+    .from("applications")
+    .select("status")
+    .eq("job_id", job.id)
+    .eq("seeker_id", seekerId)
+    .maybeSingle();
+  return data && (data.status === "shortlisted" || data.status === "accepted");
 }
 
 // GET /api/messages/conversations
-router.get("/conversations", authenticate, async (req, res) => {
+router.get("/conversations", authenticate, asyncHandler(async (req, res) => {
   const list = await findConversationsByUserId(req.user.id);
-  list.sort((a, b) => new Date(b.lastMessageAt || b.created_at) - new Date(a.lastMessageAt || a.created_at));
-  res.json({ conversations: list });
-});
+
+  const allowed = [];
+  for (const conv of list) {
+    const { data: app } = await getSupabase()
+      .from("applications")
+      .select("status")
+      .eq("job_id", conv.job_id)
+      .eq("seeker_id", conv.seeker_id)
+      .maybeSingle();
+    if (app && (app.status === "shortlisted" || app.status === "accepted")) {
+      allowed.push(conv);
+    }
+  }
+
+  allowed.sort((a, b) => new Date(b.lastMessageAt || b.created_at) - new Date(a.lastMessageAt || a.created_at));
+  res.json({ conversations: allowed });
+}));
 
 // GET /api/messages/thread?jobId=&with=
-router.get("/thread", authenticate, async (req, res) => {
+router.get("/thread", authenticate, asyncHandler(async (req, res) => {
   const jobId = Number(req.query.jobId);
   const withId = Number(req.query.with);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
+
+  const seekerId = req.user.role === "seeker" ? req.user.id : withId;
+  const allowed = await isMessagingAllowed(seekerId, job);
+  if (!allowed) {
+    return res.status(403).json({ error: "Messaging is available after being shortlisted or accepted." });
+  }
 
   const conv = await findConversation(jobId, req.user.id, withId);
   if (!conv) {
@@ -73,10 +87,10 @@ router.get("/thread", authenticate, async (req, res) => {
     messages,
     job: { id: job.id, title: job.title, company: job.company_name },
   });
-});
+}));
 
 // GET /api/messages/:id
-router.get("/:id", authenticate, async (req, res) => {
+router.get("/:id", authenticate, asyncHandler(async (req, res) => {
   const conv = await findConversationById(Number(req.params.id));
   if (!conv) return res.status(404).json({ error: "Conversation not found." });
   if (!belongsTo(conv, req.user.id)) return res.status(403).json({ error: "This conversation isn't yours." });
@@ -99,10 +113,10 @@ router.get("/:id", authenticate, async (req, res) => {
     },
     messages,
   });
-});
+}));
 
 // POST /api/messages
-router.post("/", authenticate, async (req, res) => {
+router.post("/", authenticate, asyncHandler(async (req, res) => {
   const { conversationId, jobId, recipientId, body } = req.body;
   if (!body?.trim()) return res.status(400).json({ error: "Write a message first." });
   if (String(body).length > 5000) return res.status(400).json({ error: "Message must be under 5,000 characters." });
@@ -114,16 +128,19 @@ router.post("/", authenticate, async (req, res) => {
   } else {
     const job = await findJobById(Number(jobId));
     if (!job) return res.status(404).json({ error: "Job not found." });
-    const recipient = await findUserById(Number(recipientId));
-    if (!(await canMessagePair(req.user, recipient, job))) {
-      return res.status(403).json({ error: "You can only message someone connected through a job you've applied to or posted." });
+
+    const seekerId = req.user.role === "seeker" ? req.user.id : Number(recipientId);
+    const allowed = await isMessagingAllowed(seekerId, job);
+    if (!allowed) {
+      return res.status(403).json({ error: "Messaging is available after being shortlisted or accepted." });
     }
-    conv = await findConversation(job.id, req.user.id, recipient.id);
+
+    conv = await findConversation(job.id, req.user.id, Number(recipientId));
     if (!conv) {
       conv = await createConversation({
         jobId: job.id,
         recruiterId: job.recruiter_id,
-        seekerId: job.recruiter_id === req.user.id ? recipient.id : req.user.id,
+        seekerId: job.recruiter_id === req.user.id ? Number(recipientId) : req.user.id,
       });
     }
   }
@@ -156,6 +173,6 @@ router.post("/", authenticate, async (req, res) => {
     },
     message,
   });
-});
+}));
 
 export default router;

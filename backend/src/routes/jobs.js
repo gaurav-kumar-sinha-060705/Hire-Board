@@ -1,15 +1,15 @@
 import { Router } from "express";
 import {
   findJobById, listJobs, listJobsByRecruiter, createJob, updateJob, toggleJobActive, deleteJob,
-  findCompanyById, findApplication, createApplication, updateApplicationStatus,
+  findCompanyById, findCompanyByRecruiterId, findApplication, createApplication, updateApplicationStatus,
   getApplicantDetails, getAppliedJobIds, findApplicationsBySeekerId, pushNotification,
-  deleteConversationsByJobId,
+  deleteConversationsByJobId, findUserById, getShortlistedByCompany,
 } from "../db.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { getSupabase } from "../supabase.js";
+import { EMAIL_RE, asyncHandler } from "../utils.js";
 
 const router = Router();
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES = ["applied", "in-review", "shortlisted", "rejected", "accepted"];
 const TYPES = ["Full-time", "Part-time", "Internship", "Contract"];
 const MODES = ["On-site", "Remote", "Hybrid"];
@@ -46,7 +46,7 @@ async function validateJob(body, recruiterId) {
 }
 
 // GET /api/jobs?q=search&page=1&limit=12
-router.get("/", async (req, res) => {
+router.get("/", asyncHandler(async (req, res) => {
   const q = (req.query.q || "").toLowerCase().trim();
   const companyId = req.query.companyId ? Number(req.query.companyId) : null;
   const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -54,28 +54,35 @@ router.get("/", async (req, res) => {
 
   const result = await listJobs({ q, companyId, page, limit });
   res.json(result);
-});
+}));
 
 // GET /api/jobs/mine
-router.get("/mine", authenticate, authorize("recruiter"), async (req, res) => {
+router.get("/mine", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobs = await listJobsByRecruiter(req.user.id);
   res.json({ jobs });
-});
+}));
 
 // GET /api/jobs/mine/applied
-router.get("/mine/applied", authenticate, authorize("seeker"), async (req, res) => {
+router.get("/mine/applied", authenticate, authorize("seeker"), asyncHandler(async (req, res) => {
   const jobIds = await getAppliedJobIds(req.user.id);
   res.json({ jobIds });
-});
+}));
 
 // GET /api/jobs/applications/mine
-router.get("/applications/mine", authenticate, authorize("seeker"), async (req, res) => {
+router.get("/applications/mine", authenticate, authorize("seeker"), asyncHandler(async (req, res) => {
   const applications = await findApplicationsBySeekerId(req.user.id);
   res.json({ applications });
-});
+}));
+
+// GET /api/jobs/company/:companyId/team
+router.get("/company/:companyId/team", asyncHandler(async (req, res) => {
+  const companyId = Number(req.params.companyId);
+  const team = await getShortlistedByCompany(companyId);
+  res.json({ team });
+}));
 
 // GET /api/jobs/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", asyncHandler(async (req, res) => {
   const job = await findJobById(Number(req.params.id));
   if (!job) return res.status(404).json({ error: "Job not found." });
   if (!job.is_active) return res.status(404).json({ error: "This job posting is no longer active." });
@@ -95,19 +102,25 @@ router.get("/:id", async (req, res) => {
       applicantCount: appCount || 0,
     },
   });
-});
+}));
 
 // POST /api/jobs
-router.post("/", authenticate, authorize("recruiter"), async (req, res) => {
+router.post("/", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
+  const fullUser = await findUserById(req.user.id);
+  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email before posting a job." });
+  const existingCompany = await findCompanyByRecruiterId(req.user.id);
+  if (!existingCompany) return res.status(403).json({ error: "Register your company first." });
+  if (!fullUser.profile?.headline) return res.status(403).json({ error: "Complete your profile first." });
+
   const result = await validateJob(req.body, req.user.id);
   if (result.error) return res.status(400).json({ error: result.error });
 
   const job = await createJob({ ...result.job, recruiterId: req.user.id, recruiterName: req.user.name });
   res.status(201).json({ job });
-});
+}));
 
 // PUT /api/jobs/:id
-router.put("/:id", authenticate, authorize("recruiter"), async (req, res) => {
+router.put("/:id", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
@@ -132,10 +145,10 @@ router.put("/:id", authenticate, authorize("recruiter"), async (req, res) => {
       applicantCount: appCount || 0,
     },
   });
-});
+}));
 
 // PATCH /api/jobs/:id/toggle-active
-router.patch("/:id/toggle-active", authenticate, authorize("recruiter"), async (req, res) => {
+router.patch("/:id/toggle-active", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
@@ -157,10 +170,10 @@ router.patch("/:id/toggle-active", authenticate, authorize("recruiter"), async (
       applicantCount: appCount || 0,
     },
   });
-});
+}));
 
 // DELETE /api/jobs/:id
-router.delete("/:id", authenticate, authorize("recruiter"), async (req, res) => {
+router.delete("/:id", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
@@ -176,17 +189,24 @@ router.delete("/:id", authenticate, authorize("recruiter"), async (req, res) => 
 
   await deleteConversationsByJobId(jobId);
   await getSupabase().from("applications").delete().eq("job_id", jobId);
+  await getSupabase().from("notifications").delete().like("link", `/my-jobs`);
   await deleteJob(jobId);
 
   res.json({ job: result });
-});
+}));
 
 // POST /api/jobs/:id/apply
-router.post("/:id/apply", authenticate, authorize("seeker"), async (req, res) => {
+router.post("/:id/apply", authenticate, authorize("seeker"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
   if (!job.is_active) return res.status(400).json({ error: "This job posting is no longer accepting applications." });
+
+  const fullUser = await findUserById(req.user.id);
+  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email to apply." });
+  if (!fullUser.profile?.headline || !fullUser.profile?.skills || fullUser.profile.skills.length === 0) {
+    return res.status(403).json({ error: "Complete your profile to apply." });
+  }
 
   const { name, email, note } = req.body;
   if (!name?.trim() || !EMAIL_RE.test(email || "")) {
@@ -208,10 +228,10 @@ router.post("/:id/apply", authenticate, authorize("seeker"), async (req, res) =>
   });
 
   res.status(201).json({ application });
-});
+}));
 
 // GET /api/jobs/:id/applicants
-router.get("/:id/applicants", authenticate, authorize("recruiter"), async (req, res) => {
+router.get("/:id/applicants", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.id);
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
@@ -219,10 +239,10 @@ router.get("/:id/applicants", authenticate, authorize("recruiter"), async (req, 
 
   const applicants = await getApplicantDetails(jobId);
   res.json({ applicants });
-});
+}));
 
 // PATCH /api/jobs/:jobId/applicants/:appId
-router.patch("/:jobId/applicants/:appId", authenticate, authorize("recruiter"), async (req, res) => {
+router.patch("/:jobId/applicants/:appId", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const jobId = Number(req.params.jobId);
   const appId = Number(req.params.appId);
   const job = await findJobById(jobId);
@@ -248,6 +268,6 @@ router.patch("/:jobId/applicants/:appId", authenticate, authorize("recruiter"), 
   });
 
   res.json({ application: updated });
-});
+}));
 
 export default router;

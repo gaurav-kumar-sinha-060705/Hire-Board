@@ -12,6 +12,7 @@ export default function MyJobs() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [applicantsByJob, setApplicantsByJob] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -21,7 +22,7 @@ export default function MyJobs() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
-    api.myJobs(token).then((d) => setJobs(d.jobs)).finally(() => setLoading(false));
+    api.myJobs(token).then((d) => setJobs(d.jobs)).catch(() => setError("Failed to load jobs.")).finally(() => setLoading(false));
   }, [token]);
 
   async function toggleApplicants(jobId) {
@@ -31,8 +32,13 @@ export default function MyJobs() {
     }
     setOpenId(jobId);
     if (!applicantsByJob[jobId]) {
-      const data = await api.applicants(jobId, token);
-      setApplicantsByJob((m) => ({ ...m, [jobId]: data.applicants }));
+      try {
+        const data = await api.applicants(jobId, token);
+        setApplicantsByJob((m) => ({ ...m, [jobId]: data.applicants }));
+      } catch (err) {
+        showToast(err.message);
+        setOpenId(null);
+      }
     }
   }
 
@@ -89,6 +95,14 @@ export default function MyJobs() {
   }
 
   if (loading) return <div className="empty-state"><p>Loading…</p></div>;
+
+  if (error) return (
+    <div className="empty-state">
+      <h3>Something went wrong</h3>
+      <p>{error}</p>
+      <p><button className="btn link" onClick={() => { setLoading(true); setError(null); api.myJobs(token).then((d) => setJobs(d.jobs)).catch(() => setError("Failed to load jobs.")).finally(() => setLoading(false)); }}>Try again</button></p>
+    </div>
+  );
 
   return (
     <div>
@@ -163,10 +177,12 @@ export default function MyJobs() {
                     </select>
                     <span className="job-meta">{new Date(a.applied_at).toLocaleDateString()}</span>
                     <button className="btn small outline" onClick={() => openProfile(a)}>View profile</button>
-                    <button
-                      className="btn small outline"
-                      onClick={() => navigate(`/messages?job=${job.id}&with=${a.seeker_id}`)}
-                    >Message</button>
+                    {(a.status === "shortlisted" || a.status === "accepted") && (
+                      <button
+                        className="btn small outline"
+                        onClick={() => navigate(`/messages?job=${job.id}&with=${a.seeker_id}`)}
+                      >Message</button>
+                    )}
                   </div>
                 </div>
               ))}

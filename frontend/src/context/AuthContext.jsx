@@ -58,9 +58,13 @@ export function AuthProvider({ children }) {
 
   async function refreshUser() {
     if (!token) return null;
-    const data = await api.me(token);
-    setUser(data.user);
-    return data.user;
+    try {
+      const data = await api.me(token);
+      setUser(data.user);
+      return data.user;
+    } catch {
+      return null;
+    }
   }
 
   async function refreshCompany() {

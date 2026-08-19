@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useToast } from "../context/ToastContext.jsx";
 
 const initial = {
   title: "", companyId: "", location: "", type: "Full-time",
@@ -11,6 +12,7 @@ const initial = {
 export default function PostJob() {
   const { token, company } = useAuth();
   const navigate = useNavigate();
+  const showToast = useToast();
   const [searchParams] = useSearchParams();
   const editingId = searchParams.get("id");
   const [form, setForm] = useState(initial);
@@ -63,23 +65,24 @@ export default function PostJob() {
       }
       navigate("/my-jobs");
     } catch (err) {
-      setError(err.message);
+      if (/verify/i.test(err.message)) {
+        showToast("Verify your email to post a job.");
+        navigate("/verify-email");
+      } else if (/register your company/i.test(err.message)) {
+        showToast("Register your company first.");
+        navigate("/register-company");
+      } else if (/complete your profile/i.test(err.message)) {
+        showToast("Complete your profile first.");
+        navigate("/profile");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   if (loadingJob) return null;
-
-  if (!company && !editingId) {
-    return (
-      <div className="empty-state">
-        <h3>Register your company first</h3>
-        <p>You need a registered company before posting jobs.</p>
-        <p><button className="btn" onClick={() => navigate("/register-company")}>Register company</button></p>
-      </div>
-    );
-  }
 
   return (
     <div>

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { findCompanyById, findCompanyByRecruiterId, createCompany, updateCompany, listCompanies, getCompanyJobCount } from "../db.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { getSupabase } from "../supabase.js";
+import { asyncHandler } from "../utils.js";
 
 const router = Router();
 const TYPES = ["Technology", "Finance", "Healthcare", "Education", "Marketing", "Design", "Consulting", "Manufacturing", "Retail", "Other"];
@@ -32,23 +33,24 @@ function validateCompany(body) {
 }
 
 // GET /api/companies?page=1&limit=12
-router.get("/", async (req, res) => {
+router.get("/", asyncHandler(async (req, res) => {
+  const q = (req.query.q || "").toLowerCase().trim();
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 12));
-  const result = await listCompanies({ page, limit });
+  const result = await listCompanies({ q, page, limit });
   res.json(result);
-});
+}));
 
 // GET /api/companies/mine
-router.get("/mine", authenticate, authorize("recruiter"), async (req, res) => {
+router.get("/mine", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const company = await findCompanyByRecruiterId(req.user.id);
   if (!company) return res.status(404).json({ error: "No company registered." });
   const jobCount = await getCompanyJobCount(company.id);
   res.json({ company: { ...company, jobCount } });
-});
+}));
 
 // GET /api/companies/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", asyncHandler(async (req, res) => {
   const company = await findCompanyById(Number(req.params.id));
   if (!company) return res.status(404).json({ error: "Company not found." });
 
@@ -70,10 +72,10 @@ router.get("/:id", async (req, res) => {
   );
 
   res.json({ company: { ...company, jobCount }, recentJobs: enrichedJobs });
-});
+}));
 
 // POST /api/companies
-router.post("/", authenticate, authorize("recruiter"), async (req, res) => {
+router.post("/", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const existing = await findCompanyByRecruiterId(req.user.id);
   if (existing) return res.status(409).json({ error: "You already have a registered company." });
 
@@ -84,10 +86,10 @@ router.post("/", authenticate, authorize("recruiter"), async (req, res) => {
   const jobCount = await getCompanyJobCount(company.id);
 
   res.status(201).json({ company: { ...company, jobCount } });
-});
+}));
 
 // PUT /api/companies/:id
-router.put("/:id", authenticate, authorize("recruiter"), async (req, res) => {
+router.put("/:id", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const companyId = Number(req.params.id);
   const company = await findCompanyById(companyId);
   if (!company) return res.status(404).json({ error: "Company not found." });
@@ -100,6 +102,6 @@ router.put("/:id", authenticate, authorize("recruiter"), async (req, res) => {
   const jobCount = await getCompanyJobCount(companyId);
 
   res.json({ company: { ...updated, jobCount } });
-});
+}));
 
 export default router;

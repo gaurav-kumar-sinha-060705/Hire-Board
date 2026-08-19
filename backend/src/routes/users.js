@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { findUserById, updateUserProfile, getUserProfile } from "../db.js";
+import { findUserById, updateUserProfile } from "../db.js";
 import { getSupabase } from "../supabase.js";
 import { authenticate } from "../middleware/auth.js";
+import { publicUser, asyncHandler } from "../utils.js";
 
 const router = Router();
 
@@ -13,21 +14,19 @@ const RESUME_TYPES = {
 };
 const MAX_RESUME_BYTES = 2 * 1024 * 1024;
 
-function publicUser(user) {
-  const { password, ...rest } = user;
-  return rest;
-}
-
 async function canViewSeeker(requester, target) {
   if (!target) return false;
   if (requester.id === target.id) return true;
   if (requester.role !== "recruiter") return false;
-  const { count: jobCount } = await getSupabase()
-    .from("jobs").select("*", { count: "exact", head: true }).eq("recruiter_id", requester.id);
-  if (!jobCount) return false;
-  const { count: appCount } = await getSupabase()
-    .from("applications").select("*", { count: "exact", head: true }).eq("seeker_id", target.id);
-  return appCount > 0;
+  const { data: jobs } = await getSupabase()
+    .from("jobs").select("id").eq("recruiter_id", requester.id);
+  if (!jobs || jobs.length === 0) return false;
+  const jobIds = jobs.map((j) => j.id);
+  const { count } = await getSupabase()
+    .from("applications").select("*", { count: "exact", head: true })
+    .eq("seeker_id", target.id)
+    .in("job_id", jobIds);
+  return count > 0;
 }
 
 function dataUrlBytes(dataUrl) {
@@ -43,7 +42,7 @@ function cleanSkills(input) {
 }
 
 // PUT /api/users/me/profile
-router.put("/me/profile", authenticate, async (req, res) => {
+router.put("/me/profile", authenticate, asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ error: "Account not found." });
 
@@ -66,10 +65,10 @@ router.put("/me/profile", authenticate, async (req, res) => {
   await updateUserProfile(req.user.id, profile);
   const updated = await findUserById(req.user.id);
   res.json({ user: publicUser(updated) });
-});
+}));
 
 // POST /api/users/me/resume
-router.post("/me/resume", authenticate, async (req, res) => {
+router.post("/me/resume", authenticate, asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ error: "Account not found." });
 
@@ -102,10 +101,10 @@ router.post("/me/resume", authenticate, async (req, res) => {
   await updateUserProfile(req.user.id, profile);
   const updated = await findUserById(req.user.id);
   res.json({ user: publicUser(updated) });
-});
+}));
 
 // DELETE /api/users/me/resume
-router.delete("/me/resume", authenticate, async (req, res) => {
+router.delete("/me/resume", authenticate, asyncHandler(async (req, res) => {
   const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ error: "Account not found." });
   if (!user.profile?.resume) return res.status(404).json({ error: "No resume on file." });
@@ -117,26 +116,26 @@ router.delete("/me/resume", authenticate, async (req, res) => {
   await updateUserProfile(req.user.id, profile);
   const updated = await findUserById(req.user.id);
   res.json({ user: publicUser(updated) });
-});
+}));
 
 // GET /api/users/:id
-router.get("/:id", authenticate, async (req, res) => {
+router.get("/:id", authenticate, asyncHandler(async (req, res) => {
   const target = await findUserById(Number(req.params.id));
   if (!target) return res.status(404).json({ error: "User not found." });
   if (!(await canViewSeeker(req.user, target))) {
     return res.status(403).json({ error: "You can only view candidates who applied to your postings." });
   }
   res.json({ user: publicUser(target) });
-});
+}));
 
 // GET /api/users/:id/resume
-router.get("/:id/resume", authenticate, async (req, res) => {
+router.get("/:id/resume", authenticate, asyncHandler(async (req, res) => {
   const target = await findUserById(Number(req.params.id));
   if (!target) return res.status(404).json({ error: "User not found." });
   if (!(await canViewSeeker(req.user, target))) {
     return res.status(403).json({ error: "You can only view candidates who applied to your postings." });
   }
   res.json({ resume: target.profile?.resume || null });
-});
+}));
 
 export default router;

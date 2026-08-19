@@ -10,8 +10,8 @@ export default function BrowseCompanies() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const load = useCallback(async (p) => {
-    const data = await api.listCompanies(p, 12);
+  const load = useCallback(async (q, p) => {
+    const data = await api.listCompanies(p, 12, q);
     setCompanies(data.companies);
     setTotalPages(data.totalPages);
   }, []);
@@ -23,19 +23,10 @@ export default function BrowseCompanies() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    load(page)
+    load(query, page)
       .catch(() => setError("Failed to load companies."))
       .finally(() => setLoading(false));
-  }, [page, load]);
-
-  const filtered = query
-    ? companies.filter(
-        (c) =>
-          c.name.toLowerCase().includes(query.toLowerCase()) ||
-          (c.location || "").toLowerCase().includes(query.toLowerCase()) ||
-          (c.type || "").toLowerCase().includes(query.toLowerCase())
-      )
-    : companies;
+  }, [query, page, load]);
 
   if (loading) return <div className="empty-state"><p>Loading…</p></div>;
 
@@ -58,18 +49,18 @@ export default function BrowseCompanies() {
         <div className="empty-state">
           <h3>Something went wrong</h3>
           <p>{error}</p>
-          <p><button className="btn link" onClick={() => { setLoading(true); setError(null); load(page).catch(() => setError("Failed to load companies.")).finally(() => setLoading(false)); }}>Try again</button></p>
+          <p><button className="btn link" onClick={() => { setLoading(true); setError(null); load(query, page).catch(() => setError("Failed to load companies.")).finally(() => setLoading(false)); }}>Try again</button></p>
         </div>
       )}
 
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && !error && companies.length === 0 && (
         <div className="empty-state">
           <h3>No companies found</h3>
           <p>{query ? "Try a different search." : "No companies registered yet."}</p>
         </div>
       )}
 
-      {!error && filtered.map((c) => (
+      {!error && companies.map((c) => (
         <Link className="company-card" key={c.id} to={`/company/${c.id}`}>
           <div className="company-card-head">
             <h2 className="company-card-name">{c.name}</h2>
@@ -84,7 +75,7 @@ export default function BrowseCompanies() {
         </Link>
       ))}
 
-      {totalPages > 1 && !query && (
+      {totalPages > 1 && (
         <div className="pagination">
           <button className="pagination-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
           <span className="pagination-info">Page {page} of {totalPages}</span>

@@ -19,12 +19,18 @@ export const api = {
   register: (payload) => request("/auth/register", { method: "POST", body: payload }),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
   me: (token) => request("/auth/me", { token }),
+  verifyEmail: (payload) => request("/auth/verify-email", { method: "POST", body: payload }),
+  resendOtp: (payload) => request("/auth/resend-otp", { method: "POST", body: payload }),
 
   createCompany: (payload, token) => request("/companies", { method: "POST", body: payload, token }),
   updateCompany: (id, payload, token) => request(`/companies/${id}`, { method: "PUT", body: payload, token }),
   getMyCompany: (token) => request("/companies/mine", { token }),
   getCompany: (id) => request(`/companies/${id}`),
-  listCompanies: (page = 1, limit = 12) => request(`/companies?page=${page}&limit=${limit}`),
+  listCompanies: (page = 1, limit = 12, q = "") => {
+    const params = new URLSearchParams({ page, limit });
+    if (q) params.set("q", q);
+    return request(`/companies?${params}`);
+  },
 
   listJobs: (q, companyId, page = 1, limit = 12) => {
     const params = new URLSearchParams();
@@ -35,6 +41,7 @@ export const api = {
     return request(`/jobs?${params}`);
   },
   getJob: (jobId) => request(`/jobs/${jobId}`),
+  getCompanyTeam: (companyId) => request(`/jobs/company/${companyId}/team`),
   myJobs: (token) => request("/jobs/mine", { token }),
   postJob: (payload, token) => request("/jobs", { method: "POST", body: payload, token }),
   updateJob: (jobId, payload, token) => request(`/jobs/${jobId}`, { method: "PUT", body: payload, token }),

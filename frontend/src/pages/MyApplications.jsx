@@ -10,14 +10,24 @@ export default function MyApplications() {
   const navigate = useNavigate();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     api.myApplications(token)
       .then((d) => setApps(d.applications))
+      .catch(() => setError("Failed to load applications."))
       .finally(() => setLoading(false));
   }, [token]);
 
   if (loading) return <div className="empty-state"><p>Loading…</p></div>;
+
+  if (error) return (
+    <div className="empty-state">
+      <h3>Something went wrong</h3>
+      <p>{error}</p>
+      <p><button className="btn link" onClick={() => { setLoading(true); setError(null); api.myApplications(token).then((d) => setApps(d.applications)).catch(() => setError("Failed to load applications.")).finally(() => setLoading(false)); }}>Try again</button></p>
+    </div>
+  );
 
   return (
     <div>
@@ -56,7 +66,7 @@ export default function MyApplications() {
             <span className="job-meta">Applied {new Date(a.applied_at).toLocaleDateString()}</span>
             <div className="job-actions">
               <span className={statusClass(a.status)}>{statusLabel(a.status)}</span>
-              {a.job && (
+              {a.job && (a.status === "shortlisted" || a.status === "accepted") && (
                 <button
                   className="btn small outline"
                   onClick={() => navigate(`/messages?job=${a.job.id}&with=${a.job.recruiter_id}`)}

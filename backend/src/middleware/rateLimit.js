@@ -2,6 +2,13 @@ const WINDOW_MS = 60 * 1000;
 
 const buckets = new Map();
 
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of buckets) {
+    if (now - bucket.start >= WINDOW_MS * 2) buckets.delete(key);
+  }
+}, WINDOW_MS * 5);
+
 export function rateLimit(max, message = "Too many requests. Try again shortly.") {
   return (req, res, next) => {
     const now = Date.now();
@@ -20,8 +27,4 @@ export function rateLimit(max, message = "Too many requests. Try again shortly."
     }
     next();
   };
-}
-
-export function clearRateLimits() {
-  buckets.clear();
 }
