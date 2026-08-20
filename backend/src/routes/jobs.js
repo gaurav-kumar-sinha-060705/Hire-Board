@@ -3,44 +3,67 @@ import {
   findJobById, listJobs, listJobsByRecruiter, createJob, updateJob, toggleJobActive, deleteJob,
   findCompanyById, findCompanyByRecruiterId, findApplication, createApplication, updateApplicationStatus,
   getApplicantDetails, getAppliedJobIds, findApplicationsBySeekerId, pushNotification,
-  deleteConversationsByJobId, findUserById, getShortlistedByCompany,
+  deleteConversationsByJobId, findUserById, getShortlistedByCompany, updateUserCompany, removeUserCompany,
 } from "../db.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { getSupabase } from "../supabase.js";
-import { EMAIL_RE, asyncHandler } from "../utils.js";
+import { EMAIL_RE, asyncHandler, cleanString } from "../utils.js";
 
 const router = Router();
 const STATUSES = ["applied", "in-review", "shortlisted", "rejected", "accepted"];
 const TYPES = ["Full-time", "Part-time", "Internship", "Contract"];
 const MODES = ["On-site", "Remote", "Hybrid"];
 
+const EXPERIENCE_LEVELS = ["Internship", "Entry level", "Associate", "Mid-Senior level", "Director", "Executive"];
+const CURRENCIES = ["INR", "USD", "EUR", "GBP"];
+
 async function validateJob(body, recruiterId) {
-  const { title, companyId, location, type, mode, salary, description, requirements } = body;
+  const { title, companyId, location, type, mode, salary, description, requirements, experience_level, salary_min, salary_max, salary_currency, openings, required_skills, benefits, expires_at } = body;
   if (!title?.trim() || !companyId || !location?.trim() || !description?.trim()) {
     return { error: "Title, company, location, and description are required." };
   }
   const company = await findCompanyById(Number(companyId));
   if (!company) return { error: "Company not found. Please register a company first." };
   if (company.recruiter_id !== recruiterId) return { error: "You can only post jobs for your own company." };
-  if (String(title).trim().length > 120) return { error: "Title must be under 120 characters." };
-  if (String(location).trim().length > 120) return { error: "Location must be under 120 characters." };
-  if (String(salary || "").trim().length > 60) return { error: "Salary must be under 60 characters." };
-  if (String(description || "").trim().length > 20000) return { error: "Description must be under 20,000 characters." };
-  if (String(requirements || "").trim().length > 20000) return { error: "Requirements must be under 20,000 characters." };
+  if (cleanString(title, 120).length > 120) return { error: "Title must be under 120 characters." };
+  if (cleanString(location, 120).length > 120) return { error: "Location must be under 120 characters." };
+  if (cleanString(salary || "", 60).length > 60) return { error: "Salary must be under 60 characters." };
+  if (cleanString(description || "", 20000).length > 20000) return { error: "Description must be under 20,000 characters." };
+  if (cleanString(requirements || "", 20000).length > 20000) return { error: "Requirements must be under 20,000 characters." };
   if (type && !TYPES.includes(type)) return { error: `Type must be one of: ${TYPES.join(", ")}.` };
   if (mode && !MODES.includes(mode)) return { error: `Mode must be one of: ${MODES.join(", ")}.` };
+  if (experience_level && !EXPERIENCE_LEVELS.includes(experience_level)) return { error: `Experience level must be one of: ${EXPERIENCE_LEVELS.join(", ")}.` };
+  if (salary_currency && !CURRENCIES.includes(salary_currency)) return { error: `Currency must be one of: ${CURRENCIES.join(", ")}.` };
+  if (salary_min !== undefined && salary_min !== null && salary_min !== "" && Number(salary_min) < 0) return { error: "Minimum salary cannot be negative." };
+  if (salary_max !== undefined && salary_max !== null && salary_max !== "" && Number(salary_max) < 0) return { error: "Maximum salary cannot be negative." };
+  if (Number(salary_min || 0) > 0 && Number(salary_max || 0) > 0 && Number(salary_min) > Number(salary_max)) return { error: "Minimum salary cannot exceed maximum." };
+  const openingsNum = Number(openings) || 1;
+  if (openingsNum < 1 || openingsNum > 999) return { error: "Openings must be between 1 and 999." };
+  if (expires_at) {
+    const expDate = new Date(expires_at);
+    if (isNaN(expDate.getTime())) return { error: "Invalid expiration date." };
+    if (expDate <= new Date()) return { error: "Expiration date must be in the future." };
+  }
 
   return {
     job: {
-      title: String(title).trim(),
+      title: cleanString(title, 120),
       companyId: company.id,
       companyName: company.name,
-      location: String(location).trim(),
+      location: cleanString(location, 120),
       type: type || "Full-time",
       mode: mode || "On-site",
-      salary: String(salary || "").trim().slice(0, 60),
-      description: String(description).trim(),
-      requirements: String(requirements || "").trim(),
+      salary: cleanString(salary, 60),
+      description: cleanString(description, 20000),
+      requirements: cleanString(requirements, 20000),
+      experience_level: experience_level || null,
+      salary_min: salary_min ? Number(salary_min) : null,
+      salary_max: salary_max ? Number(salary_max) : null,
+      salary_currency: salary_currency || "INR",
+      openings: openingsNum,
+      required_skills: Array.isArray(required_skills) ? required_skills.map((s) => cleanString(s, 40)).filter(Boolean).slice(0, 20) : [],
+      benefits: Array.isArray(benefits) ? benefits.map((b) => cleanString(b, 60)).filter(Boolean).slice(0, 20) : [],
+      expires_at: expires_at || null,
     },
   };
 }
@@ -81,6 +104,22 @@ router.get("/company/:companyId/team", asyncHandler(async (req, res) => {
   res.json({ team });
 }));
 
+// DELETE /api/jobs/company/:companyId/team/:seekerId
+router.delete("/company/:companyId/team/:seekerId", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
+  const companyId = Number(req.params.companyId);
+  const seekerId = Number(req.params.seekerId);
+  const company = await findCompanyById(companyId);
+  if (!company) return res.status(404).json({ error: "Company not found." });
+  if (company.recruiter_id !== req.user.id) return res.status(403).json({ error: "This isn't your company." });
+
+  const seeker = await findUserById(seekerId);
+  if (!seeker) return res.status(404).json({ error: "User not found." });
+  if (seeker.company !== company.name) return res.status(400).json({ error: "User is not part of this company." });
+
+  await removeUserCompany(seekerId);
+  res.json({ ok: true });
+}));
+
 // GET /api/jobs/:id
 router.get("/:id", asyncHandler(async (req, res) => {
   const job = await findJobById(Number(req.params.id));
@@ -97,8 +136,8 @@ router.get("/:id", asyncHandler(async (req, res) => {
     job: {
       ...job,
       company: company
-        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-        : { id: null, name: job.company_name, location: job.location, type: null, description: "", website: "", size: "" },
+        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+        : { id: null, name: job.company_name, location: job.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
       applicantCount: appCount || 0,
     },
   });
@@ -115,7 +154,7 @@ router.post("/", authenticate, authorize("recruiter"), asyncHandler(async (req, 
   const result = await validateJob(req.body, req.user.id);
   if (result.error) return res.status(400).json({ error: result.error });
 
-  const job = await createJob({ ...result.job, recruiterId: req.user.id, recruiterName: req.user.name });
+  const job = await createJob({ ...result.job, recruiterId: req.user.id, recruiterName: fullUser.name });
   res.status(201).json({ job });
 }));
 
@@ -140,8 +179,8 @@ router.put("/:id", authenticate, authorize("recruiter"), asyncHandler(async (req
     job: {
       ...updated,
       company: company
-        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-        : { id: null, name: updated.company_name, location: updated.location, type: null, description: "", website: "", size: "" },
+        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+        : { id: null, name: updated.company_name, location: updated.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
       applicantCount: appCount || 0,
     },
   });
@@ -165,8 +204,8 @@ router.patch("/:id/toggle-active", authenticate, authorize("recruiter"), asyncHa
     job: {
       ...updated,
       company: company
-        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-        : { id: null, name: updated.company_name, location: updated.location, type: null, description: "", website: "", size: "" },
+        ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+        : { id: null, name: updated.company_name, location: updated.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
       applicantCount: appCount || 0,
     },
   });
@@ -183,13 +222,13 @@ router.delete("/:id", authenticate, authorize("recruiter"), asyncHandler(async (
   const result = {
     ...job,
     company: company
-      ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-      : { id: null, name: job.company_name, location: job.location, type: null, description: "", website: "", size: "" },
+      ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+      : { id: null, name: job.company_name, location: job.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
   };
 
   await deleteConversationsByJobId(jobId);
   await getSupabase().from("applications").delete().eq("job_id", jobId);
-  await getSupabase().from("notifications").delete().like("link", `/my-jobs`);
+  await getSupabase().from("notifications").delete().eq("user_id", job.recruiter_id).eq("type", "application");
   await deleteJob(jobId);
 
   res.json({ job: result });
@@ -201,6 +240,9 @@ router.post("/:id/apply", authenticate, authorize("seeker"), asyncHandler(async 
   const job = await findJobById(jobId);
   if (!job) return res.status(404).json({ error: "Job not found." });
   if (!job.is_active) return res.status(400).json({ error: "This job posting is no longer accepting applications." });
+  if (job.expires_at && new Date(job.expires_at) < new Date()) {
+    return res.status(400).json({ error: "Applications for this position are closed." });
+  }
 
   const fullUser = await findUserById(req.user.id);
   if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email to apply." });
@@ -208,7 +250,7 @@ router.post("/:id/apply", authenticate, authorize("seeker"), asyncHandler(async 
     return res.status(403).json({ error: "Complete your profile to apply." });
   }
 
-  const { name, email, note } = req.body;
+  const { name, email, note, phone, portfolio_url, expected_salary } = req.body;
   if (!name?.trim() || !EMAIL_RE.test(email || "")) {
     return res.status(400).json({ error: "Enter your name and a valid email." });
   }
@@ -218,12 +260,17 @@ router.post("/:id/apply", authenticate, authorize("seeker"), asyncHandler(async 
   const already = await findApplication(jobId, req.user.id);
   if (already) return res.status(409).json({ error: "You already applied to this job." });
 
-  const application = await createApplication({ jobId, seekerId: req.user.id, name: name.trim(), email: email.trim(), note: (note || "").trim() });
+  const application = await createApplication({
+    jobId, seekerId: req.user.id, name: name.trim(), email: email.trim(),
+    note: (note || "").trim(), phone: (phone || "").trim(),
+    portfolio_url: (portfolio_url || "").trim(),
+    expected_salary: expected_salary ? Number(expected_salary) : null,
+  });
 
   await pushNotification({
     userId: job.recruiter_id,
     type: "application",
-    message: `${req.user.name} applied to "${job.title}"`,
+    message: `${fullUser.name} applied to "${job.title}"`,
     link: `/my-jobs`,
   });
 
@@ -259,6 +306,11 @@ router.patch("/:jobId/applicants/:appId", authenticate, authorize("recruiter"), 
   }
 
   const updated = await updateApplicationStatus(appId, status);
+
+  if (status === "accepted") {
+    const company = job.company_id ? await findCompanyById(job.company_id) : null;
+    await updateUserCompany(application.seeker_id, company?.name || job.company_name);
+  }
 
   await pushNotification({
     userId: application.seeker_id,

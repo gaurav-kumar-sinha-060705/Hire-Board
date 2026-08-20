@@ -11,6 +11,7 @@ export default function Navbar() {
   const [notifs, setNotifs] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const notifRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -30,7 +31,6 @@ export default function Navbar() {
     const interval = setInterval(() => {
       api.myNotifications(token).then((d) => setUnread(d.unread)).catch(() => {});
     }, 15000);
-    api.myNotifications(token).then((d) => setUnread(d.unread)).catch(() => {});
     return () => clearInterval(interval);
   }, [user, token]);
 
@@ -50,6 +50,12 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    setMenuOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname]);
 
   async function handleMarkAllRead() {
     try {
@@ -75,7 +81,12 @@ export default function Navbar() {
     <div className="nav">
       <div className="nav-inner">
         <Link to="/" className="nav-brand">Hire Board</Link>
-        <div className="nav-links">
+
+        <button className={`nav-hamburger${mobileOpen ? " open" : ""}`} onClick={() => setMobileOpen((o) => !o)}>
+          <span /><span /><span />
+        </button>
+
+        <div className={`nav-links${mobileOpen ? " open" : ""}`}>
           {user && (
             <>
               <Link className={isActive("/browse")} to="/browse">Browse Jobs</Link>

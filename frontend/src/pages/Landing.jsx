@@ -1,11 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../api.js";
 
-function formatNum(n) {
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(n);
+function AnimatedNumber({ value, duration = 1200 }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (value === 0) { setDisplay(0); return; }
+    let start = 0;
+    const startTime = performance.now();
+    function tick(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * value));
+      if (progress < 1) ref.current = requestAnimationFrame(tick);
+    }
+    ref.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(ref.current);
+  }, [value, duration]);
+
+  if (display >= 1000) {
+    const k = display / 1000;
+    return <>{k % 1 === 0 ? k + "k" : k.toFixed(1).replace(/\.0$/, "") + "k"}</>;
+  }
+  return <>{display}</>;
 }
 
 export default function Landing() {
@@ -19,84 +40,85 @@ export default function Landing() {
   if (user) return null;
 
   return (
-    <div>
-      <section style={{ textAlign: "center", padding: "60px 0 32px" }}>
+    <div className="landing">
+      {/* Hero */}
+      <section className="landing-hero">
         <div className="eyebrow">Hire Board</div>
-        <h1 style={{ fontSize: 42, lineHeight: 1.15, marginTop: 12, maxWidth: 600, marginLeft: "auto", marginRight: "auto" }}>
+        <h1 className="landing-title">
           Know the company.<br />Before you apply.
         </h1>
-        <p style={{ color: "var(--gray-500)", fontSize: 18, marginTop: 16, maxWidth: 500, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
+        <p className="landing-sub">
           India's culture-first hiring platform. Browse real company profiles, see how teams work, and find the right fit — not just the right salary.
         </p>
-        <div style={{ marginTop: 32 }}>
-          <Link className="btn" to="/register" style={{ padding: "12px 28px", fontSize: 15 }}>Get started</Link>
+        <div className="landing-cta">
+          <Link className="btn" to="/register">Get started free</Link>
         </div>
       </section>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 32, padding: "20px 0", borderTop: "1px solid var(--gray-100)", borderBottom: "1px solid var(--gray-100)" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalJobs)}</div>
-          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Job Postings</div>
+      {/* Stats */}
+      <section className="landing-stats">
+        <div className="landing-stat">
+          <div className="landing-stat-num"><AnimatedNumber value={stats.totalJobs} /></div>
+          <div className="landing-stat-label">Open roles</div>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalCompanies)}</div>
-          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Companies</div>
+        <div className="landing-stat-divider" />
+        <div className="landing-stat">
+          <div className="landing-stat-num"><AnimatedNumber value={stats.totalCompanies} /></div>
+          <div className="landing-stat-label">Companies</div>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "var(--font-display)" }}>{formatNum(stats.totalUsers)}</div>
-          <div style={{ fontSize: 12, color: "var(--gray-500)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 4 }}>Users</div>
-        </div>
-      </div>
-
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 20, marginTop: 48 }}>
-        <div className="card" style={{ padding: 28 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>&#127970;</div>
-          <h3 style={{ fontSize: 18, marginBottom: 8 }}>Company culture profiles</h3>
-          <p style={{ color: "var(--gray-500)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-            See tech stack, work culture, team size, and growth stage — managed by recruiters, not anonymous reviews.
-          </p>
-        </div>
-        <div className="card" style={{ padding: 28 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>&#128176;</div>
-          <h3 style={{ fontSize: 18, marginBottom: 8 }}>Free for small businesses</h3>
-          <p style={{ color: "var(--gray-500)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-            India's 63 million MSMEs can post jobs and hire talent without paying enterprise prices. Zero cost to start.
-          </p>
-        </div>
-        <div className="card" style={{ padding: 28 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>&#127891;</div>
-          <h3 style={{ fontSize: 18, marginBottom: 8 }}>Campus hiring for all</h3>
-          <p style={{ color: "var(--gray-500)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-            Tier 2 and 3 college students get access to companies that don't visit their campus. Breaking the placement barrier.
-          </p>
+        <div className="landing-stat-divider" />
+        <div className="landing-stat">
+          <div className="landing-stat-num"><AnimatedNumber value={stats.totalUsers} /></div>
+          <div className="landing-stat-label">Users</div>
         </div>
       </section>
 
-      <section style={{ marginTop: 64, padding: "40px 0", textAlign: "center" }}>
-        <h2 style={{ fontSize: 28, marginBottom: 12 }}>How it works</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 32, marginTop: 32, maxWidth: 700, marginLeft: "auto", marginRight: "auto" }}>
-          <div>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--black)", color: "var(--white)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontWeight: 600, fontSize: 16 }}>1</div>
-            <h3 style={{ fontSize: 16, marginBottom: 6 }}>Create your profile</h3>
-            <p style={{ color: "var(--gray-500)", fontSize: 13, margin: 0 }}>Sign up as a recruiter or job seeker in 30 seconds.</p>
+      {/* Features */}
+      <section className="landing-features">
+        <div className="landing-feature-card">
+          <div className="landing-feature-icon">&#127970;</div>
+          <h3>Company culture profiles</h3>
+          <p>See tech stack, work culture, team size, and growth stage — managed by recruiters, not anonymous reviews.</p>
+        </div>
+        <div className="landing-feature-card">
+          <div className="landing-feature-icon">&#128176;</div>
+          <h3>Free for small businesses</h3>
+          <p>India's 63 million MSMEs can post jobs and hire talent without paying enterprise prices. Zero cost to start.</p>
+        </div>
+        <div className="landing-feature-card">
+          <div className="landing-feature-icon">&#127891;</div>
+          <h3>Campus hiring for all</h3>
+          <p>Tier 2 and 3 college students get access to companies that don't visit their campus. Breaking the placement barrier.</p>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="landing-how">
+        <h2 className="landing-section-title">How it works</h2>
+        <div className="landing-steps">
+          <div className="landing-step">
+            <div className="landing-step-num">1</div>
+            <h3>Create your profile</h3>
+            <p>Sign up as a recruiter or job seeker in 30 seconds.</p>
           </div>
-          <div>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--black)", color: "var(--white)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontWeight: 600, fontSize: 16 }}>2</div>
-            <h3 style={{ fontSize: 16, marginBottom: 6 }}>Explore companies</h3>
-            <p style={{ color: "var(--gray-500)", fontSize: 13, margin: 0 }}>Browse real company profiles with culture, team, and growth data.</p>
+          <div className="landing-step">
+            <div className="landing-step-num">2</div>
+            <h3>Explore companies</h3>
+            <p>Browse real company profiles with culture, team, and growth data.</p>
           </div>
-          <div>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--black)", color: "var(--white)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontWeight: 600, fontSize: 16 }}>3</div>
-            <h3 style={{ fontSize: 16, marginBottom: 6 }}>Apply & connect</h3>
-            <p style={{ color: "var(--gray-500)", fontSize: 13, margin: 0 }}>Apply to jobs and message recruiters directly through the platform.</p>
+          <div className="landing-step">
+            <div className="landing-step-num">3</div>
+            <h3>Apply &amp; connect</h3>
+            <p>Apply to jobs and message recruiters directly through the platform.</p>
           </div>
         </div>
       </section>
 
-      <section style={{ marginTop: 48, padding: "40px", background: "var(--black)", borderRadius: 8, textAlign: "center" }}>
-        <h2 style={{ color: "var(--white)", fontSize: 24, marginBottom: 8 }}>Ready to find the right fit?</h2>
-        <p style={{ color: "var(--gray-300)", fontSize: 15, marginBottom: 24 }}>Join recruiters and job seekers who hire with transparency.</p>
-        <Link className="btn" to="/register" style={{ background: "var(--white)", color: "var(--black)", padding: "12px 28px", fontSize: 15 }}>Create free account</Link>
+      {/* CTA */}
+      <section className="landing-cta-block">
+        <h2>Ready to find the right fit?</h2>
+        <p>Join recruiters and job seekers who hire with transparency.</p>
+        <Link className="btn landing-cta-btn" to="/register">Create free account</Link>
       </section>
     </div>
   );

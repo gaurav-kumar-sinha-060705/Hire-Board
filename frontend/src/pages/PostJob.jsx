@@ -3,10 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
+import { BENEFITS_OPTIONS } from "../companyConstants.js";
 
 const initial = {
   title: "", companyId: "", location: "", type: "Full-time",
-  mode: "On-site", salary: "", description: "", requirements: "",
+  mode: "On-site", description: "", requirements: "",
+  experience_level: "", salary_min: "", salary_max: "", salary_currency: "INR",
+  openings: 1, required_skills: "", benefits: [], expires_at: "",
 };
 
 export default function PostJob() {
@@ -19,6 +22,11 @@ export default function PostJob() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingJob, setLoadingJob] = useState(Boolean(editingId));
+  const [skillsInput, setSkillsInput] = useState("");
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDate = tomorrow.toISOString().split("T")[0];
 
   useEffect(() => {
     if (editingId) {
@@ -29,9 +37,16 @@ export default function PostJob() {
           location: d.job.location,
           type: d.job.type,
           mode: d.job.mode,
-          salary: d.job.salary || "",
           description: d.job.description,
           requirements: d.job.requirements || "",
+          experience_level: d.job.experience_level || "",
+          salary_min: d.job.salary_min || "",
+          salary_max: d.job.salary_max || "",
+          salary_currency: d.job.salary_currency || "INR",
+          openings: d.job.openings || 1,
+          required_skills: Array.isArray(d.job.required_skills) ? d.job.required_skills.join(", ") : "",
+          benefits: d.job.benefits || [],
+          expires_at: d.job.expires_at ? d.job.expires_at.split("T")[0] : "",
         });
       }).catch((err) => {
         setError(err.message);
@@ -49,6 +64,26 @@ export default function PostJob() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function addSkillTag() {
+    const tags = skillsInput.split(",").map((t) => t.trim()).filter(Boolean);
+    if (tags.length) {
+      update("required_skills", form.required_skills ? form.required_skills + ", " + tags.join(", ") : tags.join(", "));
+      setSkillsInput("");
+    }
+  }
+
+  function removeSkillTag(tag) {
+    const current = form.required_skills.split(",").map((t) => t.trim()).filter((t) => t && t !== tag);
+    update("required_skills", current.join(", "));
+  }
+
+  function toggleBenefit(b) {
+    setForm((f) => {
+      const arr = f.benefits.includes(b) ? f.benefits.filter((x) => x !== b) : [...f.benefits, b];
+      return { ...f, benefits: arr };
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!form.title.trim() || !form.companyId || !form.location.trim() || !form.description.trim()) {
@@ -58,10 +93,14 @@ export default function PostJob() {
     setLoading(true);
     setError("");
     try {
+      const payload = {
+        ...form,
+        required_skills: form.required_skills ? form.required_skills.split(",").map((t) => t.trim()).filter(Boolean) : [],
+      };
       if (editingId) {
-        await api.updateJob(editingId, form, token);
+        await api.updateJob(editingId, payload, token);
       } else {
-        await api.postJob(form, token);
+        await api.postJob(payload, token);
       }
       navigate("/my-jobs");
     } catch (err) {
@@ -126,8 +165,47 @@ export default function PostJob() {
             </select>
           </div>
           <div className="field">
-            <label htmlFor="salary">Salary (optional)</label>
-            <input id="salary" maxLength={60} value={form.salary} onChange={(e) => update("salary", e.target.value)} placeholder="₹8–12 LPA" />
+            <label htmlFor="experience_level">Experience level</label>
+            <select id="experience_level" value={form.experience_level} onChange={(e) => update("experience_level", e.target.value)}>
+              <option value="">Select level</option>
+              <option>Internship</option>
+              <option>Entry level</option>
+              <option>Associate</option>
+              <option>Mid-Senior level</option>
+              <option>Director</option>
+              <option>Executive</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="field-row-3">
+          <div className="field">
+            <label htmlFor="salary_min">Salary min</label>
+            <input id="salary_min" type="number" min={0} value={form.salary_min} onChange={(e) => update("salary_min", e.target.value)} placeholder="300000" />
+          </div>
+          <div className="field">
+            <label htmlFor="salary_max">Salary max</label>
+            <input id="salary_max" type="number" min={0} value={form.salary_max} onChange={(e) => update("salary_max", e.target.value)} placeholder="600000" />
+          </div>
+          <div className="field">
+            <label htmlFor="salary_currency">Currency</label>
+            <select id="salary_currency" value={form.salary_currency} onChange={(e) => update("salary_currency", e.target.value)}>
+              <option>INR</option>
+              <option>USD</option>
+              <option>EUR</option>
+              <option>GBP</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="field-row">
+          <div className="field">
+            <label htmlFor="openings">Openings</label>
+            <input id="openings" type="number" min={1} value={form.openings} onChange={(e) => update("openings", parseInt(e.target.value) || 1)} />
+          </div>
+          <div className="field">
+            <label htmlFor="expires_at">Application deadline</label>
+            <input id="expires_at" type="date" min={minDate} value={form.expires_at} onChange={(e) => update("expires_at", e.target.value)} />
           </div>
         </div>
 
@@ -139,6 +217,36 @@ export default function PostJob() {
         <div className="field">
           <label htmlFor="requirements">Requirements</label>
           <textarea id="requirements" maxLength={20000} value={form.requirements} onChange={(e) => update("requirements", e.target.value)} placeholder="Skills, experience, qualifications…" />
+        </div>
+
+        <div className="field">
+          <label>Required skills</label>
+          <div className="tag-input-row">
+            <input value={skillsInput} onChange={(e) => setSkillsInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkillTag(); } }} placeholder="React, TypeScript, SQL" />
+            <button type="button" className="btn tag-input-btn" onClick={addSkillTag}>Add</button>
+          </div>
+          {form.required_skills && (
+            <div className="job-tags" style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {form.required_skills.split(",").map((t) => t.trim()).filter(Boolean).map((tag) => (
+                <span key={tag} className="tag">
+                  {tag}
+                  <button type="button" onClick={() => removeSkillTag(tag)} style={{ marginLeft: 4, background: "none", border: "none", color: "inherit", cursor: "pointer", fontWeight: 700 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="field">
+          <label>Benefits</label>
+          <div className="checkbox-grid">
+            {BENEFITS_OPTIONS.map((b) => (
+              <label key={b}>
+                <input type="checkbox" checked={form.benefits.includes(b)} onChange={() => toggleBenefit(b)} />
+                {b}
+              </label>
+            ))}
+          </div>
         </div>
 
         {error && <div className="error-text">{error}</div>}

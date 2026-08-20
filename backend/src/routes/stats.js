@@ -8,7 +8,9 @@ router.get("/", async (req, res, next) => {
     const db = getSupabase();
 
     const [jobs, companies, users] = await Promise.all([
-      db.from("jobs").select("*", { count: "exact", head: true }).eq("is_active", true),
+      db.from("jobs").select("*", { count: "exact", head: true })
+        .eq("is_active", true)
+        .or("expires_at.is.null,expires_at.gt." + new Date().toISOString()),
       db.from("companies").select("*", { count: "exact", head: true }),
       db.from("users").select("*", { count: "exact", head: true }),
     ]);

@@ -11,24 +11,26 @@ export async function createEmailOTP(email, userId, purpose = "verify") {
   const tenMinAgo = now - 10 * 60 * 1000;
 
   // Lazy cleanup: deactivate OTPs older than 10 minutes
-  await db
+  const { error: deactivateErr } = await db
     .from("email_otps")
     .update({ active: false })
     .eq("user_id", userId)
     .eq("purpose", purpose)
     .eq("active", true)
     .lt("created_at", new Date(tenMinAgo).toISOString());
+  if (deactivateErr) console.log("[OTP] Deactivate cleanup failed:", deactivateErr.message);
 
-  // Lazy cleanup: delete inactive OTPs from previous days (midnight UTC wipe)
+  // Lazy cleanup: delete inactive OTPs from previous days (midnight local wipe)
   const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  await db
+  todayStart.setHours(0, 0, 0, 0);
+  const { error: deleteErr } = await db
     .from("email_otps")
     .delete()
     .eq("user_id", userId)
     .eq("purpose", purpose)
     .eq("active", false)
     .lt("created_at", todayStart.toISOString());
+  if (deleteErr) console.log("[OTP] Delete cleanup failed:", deleteErr.message);
 
   // Count ALL OTPs generated today (active + inactive) for daily limit
   const { count, error: countErr } = await db

@@ -156,13 +156,22 @@ export default function Messages() {
               onClick={() => (thread?.id === c.id ? closeThread() : openById(c))}
             >
               <div className="conv-row-top">
-                <span className="conv-name">{c.other.name}</span>
-                <span className="conv-time">{timeLabel(c.lastMessageAt)}</span>
-              </div>
-              <div className="conv-job">{c.jobTitle}{c.jobCompany ? ` · ${c.jobCompany}` : ""}</div>
-              <div className="conv-row-bottom">
-                <span className="conv-preview">{c.lastMessage || "Say hello."}</span>
-                {c.unread > 0 && <span className="badge">{c.unread}</span>}
+                {c.other?.avatar ? (
+                  <img src={c.other.avatar} alt="" className="avatar-sm" style={{ width: 32, height: 32 }} />
+                ) : (
+                  <div className="avatar-sm avatar-fallback" style={{ width: 32, height: 32, fontSize: 12 }}>{(c.other?.name || "?").charAt(0).toUpperCase()}</div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="conv-row-top" style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span className="conv-name">{c.other?.name || "Unknown"}</span>
+                    <span className="conv-time">{timeLabel(c.lastMessageAt)}</span>
+                  </div>
+                  <div className="conv-job">{c.jobTitle}{c.jobCompany ? ` · ${c.jobCompany}` : ""}</div>
+                  <div className="conv-row-bottom">
+                    <span className="conv-preview">{c.lastMessage || "Say hello."}</span>
+                    {c.unread > 0 && <span className="badge">{c.unread}</span>}
+                  </div>
+                </div>
               </div>
             </button>
           ))}
@@ -173,10 +182,15 @@ export default function Messages() {
             <>
               <div className="thread-head">
                 <button className="btn small outline thread-back" onClick={closeThread}>← Back</button>
+                {(thread?.other?.avatar || newConvOther?.avatar) ? (
+                  <img src={thread?.other?.avatar || newConvOther?.avatar} alt="" className="avatar-sm" />
+                ) : (
+                  <div className="avatar-sm avatar-fallback">{((thread ? thread.other?.name : newConvOther?.name) || "?").charAt(0).toUpperCase()}</div>
+                )}
                 <div>
                   <div className="thread-name">
-                    {thread ? thread.other.name : newConvOther.name}
-                    <span className="thread-role">{thread ? thread.other.role : newConvOther.role}</span>
+                    {thread ? thread.other?.name : newConvOther?.name}
+                    <span className="thread-role">{thread ? thread.other?.role : newConvOther?.role}</span>
                   </div>
                   <div className="thread-job">{thread ? thread.jobTitle : newConvJob.title} · {thread ? thread.jobCompany : newConvJob.company}</div>
                   {otherProfileLine && <div className="thread-profile">{otherProfileLine}</div>}

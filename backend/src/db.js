@@ -11,7 +11,7 @@ export async function findUserByEmail(email) {
 export async function findUserById(id) {
   const { data } = await getSupabase()
     .from("users")
-    .select("id, name, email, role, profile, email_verified, created_at")
+    .select("id, name, email, role, profile, company, avatar, phone, education, portfolio_url, work_experience, certifications, languages, job_preferences, email_verified, created_at")
     .eq("id", id)
     .maybeSingle();
   return data;
@@ -27,13 +27,23 @@ export async function createUser({ name, email, password, role }) {
   return data;
 }
 
-export async function updateUserPassword(userId, hashedPassword) {
-  const { error } = await getSupabase().from("users").update({ password: hashedPassword }).eq("id", userId);
+export async function updateUserProfile(userId, profile) {
+  const { error } = await getSupabase().from("users").update({ profile }).eq("id", userId);
   if (error) throw error;
 }
 
-export async function updateUserProfile(userId, profile) {
-  const { error } = await getSupabase().from("users").update({ profile }).eq("id", userId);
+export async function updateUserCompany(userId, company) {
+  const { error } = await getSupabase().from("users").update({ company }).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function removeUserCompany(userId) {
+  const { error } = await getSupabase().from("users").update({ company: null }).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function updateUserFields(userId, fields) {
+  const { error } = await getSupabase().from("users").update(fields).eq("id", userId);
   if (error) throw error;
 }
 
@@ -49,21 +59,33 @@ export async function findCompanyByRecruiterId(recruiterId) {
   return data;
 }
 
-export async function createCompany({ name, location, type, description, website, size, recruiterId }) {
+export async function createCompany({ name, location, type, description, website, size, logo, founded_year, social_links, tech_stack, benefits, culture, registered, recruiterId }) {
   const now = new Date().toISOString();
   const { data, error } = await getSupabase()
     .from("companies")
-    .insert({ name, location, type, description, website: website || "", size: size || "", recruiter_id: recruiterId, created_at: now, updated_at: now })
+    .insert({
+      name, location, type, description, website: website || "", size: size || "",
+      logo: logo || null, founded_year: founded_year || null,
+      social_links: social_links || {}, tech_stack: tech_stack || [], benefits: benefits || [],
+      culture: culture || "", registered: registered || false,
+      recruiter_id: recruiterId, created_at: now, updated_at: now,
+    })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-export async function updateCompany(id, { name, location, type, description, website, size }) {
+export async function updateCompany(id, { name, location, type, description, website, size, logo, founded_year, social_links, tech_stack, benefits, culture, registered }) {
   const { data, error } = await getSupabase()
     .from("companies")
-    .update({ name, location, type, description, website: website || "", size: size || "", updated_at: new Date().toISOString() })
+    .update({
+      name, location, type, description, website: website || "", size: size || "",
+      logo: logo || null, founded_year: founded_year || null,
+      social_links: social_links || {}, tech_stack: tech_stack || [], benefits: benefits || [],
+      culture: culture || "", registered: registered || false,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .select()
     .single();
@@ -94,7 +116,9 @@ export async function listCompanies({ q, page, limit }) {
       const { count } = await getSupabase()
         .from("jobs")
         .select("*", { count: "exact", head: true })
-        .eq("company_id", c.id);
+        .eq("company_id", c.id)
+        .eq("is_active", true)
+        .or("expires_at.is.null,expires_at.gt." + new Date().toISOString());
       return { ...c, jobCount: count || 0 };
     })
   );
@@ -106,7 +130,9 @@ export async function getCompanyJobCount(companyId) {
   const { count } = await getSupabase()
     .from("jobs")
     .select("*", { count: "exact", head: true })
-    .eq("company_id", companyId);
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .or("expires_at.is.null,expires_at.gt." + new Date().toISOString());
   return count || 0;
 }
 
@@ -147,8 +173,8 @@ export async function listJobs({ q, companyId, page, limit }) {
       return {
         ...j,
         company: company
-          ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-          : { id: null, name: j.company_name, location: j.location, type: null, description: "", website: "", size: "" },
+          ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+          : { id: null, name: j.company_name, location: j.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
         applicantCount: appCount || 0,
       };
     })
@@ -174,15 +200,15 @@ export async function listJobsByRecruiter(recruiterId) {
       return {
         ...j,
         company: company
-          ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-          : { id: null, name: j.company_name, location: j.location, type: null, description: "", website: "", size: "" },
+          ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+          : { id: null, name: j.company_name, location: j.location, type: null, description: "", website: "", size: "", logo: null, registered: false },
         applicantCount: appCount || 0,
       };
     })
   );
 }
 
-export async function createJob({ title, companyId, companyName, location, type, mode, salary, description, requirements, recruiterId, recruiterName }) {
+export async function createJob({ title, companyId, companyName, location, type, mode, salary, description, requirements, recruiterId, recruiterName, experience_level, salary_min, salary_max, salary_currency, openings, required_skills, benefits, expires_at }) {
   const { data, error } = await getSupabase()
     .from("jobs")
     .insert({
@@ -190,30 +216,39 @@ export async function createJob({ title, companyId, companyName, location, type,
       type: type || "Full-time", mode: mode || "On-site",
       salary: salary || "", description, requirements: requirements || "",
       recruiter_id: recruiterId, recruiter_name: recruiterName, is_active: true,
+      experience_level: experience_level || null,
+      salary_min: salary_min || null, salary_max: salary_max || null,
+      salary_currency: salary_currency || "INR", openings: openings || 1,
+      required_skills: required_skills || [], benefits: benefits || [],
+      expires_at: expires_at || null,
     })
     .select()
     .single();
   if (error) throw error;
 
   const company = companyId ? await findCompanyById(companyId) : null;
-  const { count: appCount } = await getSupabase()
-    .from("applications")
-    .select("*", { count: "exact", head: true })
-    .eq("job_id", data.id);
 
   return {
     ...data,
     company: company
-      ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size }
-      : { id: null, name: companyName, location, type: null, description: "", website: "", size: "" },
-    applicantCount: appCount || 0,
+      ? { id: company.id, name: company.name, location: company.location, type: company.type, description: company.description, website: company.website, size: company.size, logo: company.logo, registered: company.registered }
+      : { id: null, name: companyName, location, type: null, description: "", website: "", size: "", logo: null, registered: false },
+    applicantCount: 0,
   };
 }
 
-export async function updateJob(id, { title, companyId, companyName, location, type, mode, salary, description, requirements }) {
+export async function updateJob(id, { title, companyId, companyName, location, type, mode, salary, description, requirements, experience_level, salary_min, salary_max, salary_currency, openings, required_skills, benefits, expires_at }) {
   const { data, error } = await getSupabase()
     .from("jobs")
-    .update({ title, company_id: companyId, company_name: companyName, location, type, mode, salary: salary || "", description, requirements: requirements || "" })
+    .update({
+      title, company_id: companyId, company_name: companyName, location, type, mode,
+      salary: salary || "", description, requirements: requirements || "",
+      experience_level: experience_level || null,
+      salary_min: salary_min || null, salary_max: salary_max || null,
+      salary_currency: salary_currency || "INR", openings: openings || 1,
+      required_skills: required_skills || [], benefits: benefits || [],
+      expires_at: expires_at || null,
+    })
     .eq("id", id)
     .select()
     .single();
@@ -235,7 +270,8 @@ export async function toggleJobActive(id) {
 }
 
 export async function deleteJob(id) {
-  await getSupabase().from("jobs").delete().eq("id", id);
+  const { error } = await getSupabase().from("jobs").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ── Applications ───────────────────────────────────────
@@ -248,15 +284,6 @@ export async function findApplication(jobId, seekerId) {
     .eq("seeker_id", seekerId)
     .maybeSingle();
   return data;
-}
-
-export async function findApplicationsByJobId(jobId) {
-  const { data } = await getSupabase()
-    .from("applications")
-    .select("*")
-    .eq("job_id", jobId)
-    .order("id", { ascending: false });
-  return data || [];
 }
 
 export async function findApplicationsBySeekerId(seekerId) {
@@ -291,10 +318,10 @@ export async function getAppliedJobIds(seekerId) {
   return (data || []).map((a) => a.job_id);
 }
 
-export async function createApplication({ jobId, seekerId, name, email, note }) {
+export async function createApplication({ jobId, seekerId, name, email, note, phone, portfolio_url, expected_salary }) {
   const { data, error } = await getSupabase()
     .from("applications")
-    .insert({ job_id: jobId, seeker_id: seekerId, name, email, note: note || "", status: "applied" })
+    .insert({ job_id: jobId, seeker_id: seekerId, name, email, note: note || "", phone: phone || "", portfolio_url: portfolio_url || "", expected_salary: expected_salary || null, status: "applied" })
     .select()
     .single();
   if (error) throw error;
@@ -332,6 +359,11 @@ export async function getApplicantDetails(jobId) {
           headline: profile.headline || "", location: profile.location || "",
           skills: profile.skills || [], experience: profile.experience || "",
           bio: profile.bio || "", linkedin: profile.linkedin || "", resume,
+          avatar: seeker?.avatar || null, phone: seeker?.phone || a.phone || "",
+          education: seeker?.education || [], portfolio_url: seeker?.portfolio_url || a.portfolio_url || "",
+          work_experience: seeker?.work_experience || [], certifications: seeker?.certifications || [],
+          languages: seeker?.languages || [], job_preferences: seeker?.job_preferences || {},
+          expected_salary: a.expected_salary || null,
         },
       };
     })
@@ -339,39 +371,62 @@ export async function getApplicantDetails(jobId) {
 }
 
 export async function getShortlistedByCompany(companyId) {
+  const company = await findCompanyById(companyId);
+  const companyName = company?.name;
+
   const { data: jobs } = await getSupabase()
     .from("jobs")
     .select("id")
     .eq("company_id", companyId);
 
-  if (!jobs || jobs.length === 0) return [];
+  const jobIds = (jobs || []).map((j) => j.id);
 
-  const jobIds = jobs.map((j) => j.id);
+  const { data: apps } = jobIds.length
+    ? await getSupabase()
+        .from("applications")
+        .select("*")
+        .in("job_id", jobIds)
+        .in("status", ["accepted"])
+    : { data: [] };
 
-  const { data: apps } = await getSupabase()
-    .from("applications")
-    .select("*")
-    .in("job_id", jobIds)
-    .in("status", ["shortlisted", "accepted"]);
+  const applicationSeekerIds = new Set((apps || []).map((a) => a.seeker_id));
 
-  return Promise.all(
-    (apps || []).map(async (a) => {
-      const seeker = await findUserById(a.seeker_id);
+  let companyColumnSeekerIds = new Set();
+  if (companyName) {
+    const { data: users } = await getSupabase()
+      .from("users")
+      .select("id")
+      .eq("company", companyName)
+      .eq("role", "seeker");
+    (users || []).forEach((u) => companyColumnSeekerIds.add(u.id));
+  }
+
+  const allSeekerIds = [...new Set([...applicationSeekerIds, ...companyColumnSeekerIds])];
+
+  const results = await Promise.all(
+    allSeekerIds.map(async (seekerId) => {
+      const seeker = await findUserById(seekerId);
       if (!seeker) return null;
       const profile = seeker.profile || {};
-      const job = await findJobById(a.job_id);
+
+      const app = (apps || []).find((a) => a.seeker_id === seekerId);
+      const job = app ? await findJobById(app.job_id) : null;
+
       return {
         id: seeker.id,
         name: seeker.name,
+        avatar: seeker.avatar || null,
         headline: profile.headline || "",
         location: profile.location || "",
         skills: profile.skills || [],
         bio: profile.bio || "",
-        status: a.status,
-        jobTitle: job?.title || "Deleted posting",
+        status: app ? app.status : "accepted",
+        jobTitle: job?.title || (app ? "Deleted posting" : null),
       };
     })
   );
+
+  return results.filter(Boolean);
 }
 
 // ── Conversations ──────────────────────────────────────
@@ -512,29 +567,4 @@ export async function markAllNotificationsRead(userId) {
   await getSupabase().from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
 }
 
-// ── Password Resets ────────────────────────────────────
 
-export async function createPasswordReset(userId, token, expiresAt) {
-  await getSupabase().from("password_resets").insert({ user_id: userId, token, expires_at: expiresAt });
-}
-
-export async function findPasswordReset(token) {
-  const { data } = await getSupabase()
-    .from("password_resets")
-    .select("*")
-    .eq("token", token)
-    .gt("expires_at", Date.now())
-    .maybeSingle();
-  if (!data) {
-    await getSupabase().from("password_resets").delete().lt("expires_at", Date.now());
-  }
-  return data;
-}
-
-export async function deletePasswordReset(token) {
-  await getSupabase().from("password_resets").delete().eq("token", token);
-}
-
-export async function cleanExpiredResets() {
-  await getSupabase().from("password_resets").delete().lt("expires_at", Date.now());
-}

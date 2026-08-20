@@ -4,8 +4,8 @@ import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 import ApplyModal from "../components/ApplyModal.jsx";
-import { statusLabel, statusClass } from "../status.js";
-import { jobTicketId } from "../utils.js";
+import { canApply, submitApplication as submitApplicationFn } from "../applyGuard.js";
+
 
 export default function BrowseJobs() {
   const { user, token } = useAuth();
@@ -13,28 +13,26 @@ export default function BrowseJobs() {
   const showToast = useToast();
   const [jobs, setJobs] = useState([]);
   const [query, setQuery] = useState("");
-  const [statusByJob, setStatusByJob] = useState({});
   const [applyTarget, setApplyTarget] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [appliedIds, setAppliedIds] = useState(new Set());
+
+  useEffect(() => {
+    if (user?.role === "seeker" && token) {
+      api.myAppliedJobIds(token).then((d) => {
+        setAppliedIds(new Set(d.jobIds));
+      }).catch(() => {});
+    }
+  }, [user, token]);
 
   const loadJobs = useCallback(async (q, p) => {
     const data = await api.listJobs(q, undefined, p, 12);
     setJobs(data.jobs);
     setTotalPages(data.totalPages);
   }, []);
-
-  useEffect(() => {
-    if (user?.role === "seeker" && token) {
-      api.myApplications(token).then((d) => {
-        const map = {};
-        for (const a of d.applications) map[a.job_id] = a.status;
-        setStatusByJob(map);
-      }).catch(() => {});
-    }
-  }, [user, token]);
 
   useEffect(() => {
     setPage(1);
@@ -52,47 +50,19 @@ export default function BrowseJobs() {
   }, [query, page, loadJobs]);
 
   function handleApplyClick(job) {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    if (user.role !== "seeker") {
-      showToast("Sign in as a job seeker to apply.");
-      return;
-    }
-    if (!user.email_verified) {
-      showToast("Verify your email to apply.");
-      navigate("/verify-email");
-      return;
-    }
-    if (!user.profile?.headline || !user.profile?.skills || user.profile.skills.length === 0) {
-      showToast("Complete your profile to apply.");
-      navigate("/profile");
-      return;
-    }
+    if (!canApply(user, navigate, showToast)) return;
     setApplyTarget(job);
   }
 
   async function submitApplication(payload) {
-    try {
-      await api.applyToJob(applyTarget.id, payload, token);
-      setStatusByJob((m) => ({ ...m, [applyTarget.id]: "applied" }));
+    const success = await submitApplicationFn(applyTarget.id, payload, token, navigate, showToast);
+    if (success) {
+      setAppliedIds((prev) => new Set([...prev, applyTarget.id]));
       setApplyTarget(null);
-      showToast("Application submitted.");
-    } catch (err) {
-      if (/verify/i.test(err.message)) {
-        setApplyTarget(null);
-        showToast("Verify your email to apply.");
-        navigate("/verify-email");
-      } else if (/profile/i.test(err.message)) {
-        setApplyTarget(null);
-        showToast("Complete your profile to apply.");
-        navigate("/profile");
-      } else {
-        throw err;
-      }
     }
   }
+
+  const visibleJobs = jobs.filter((j) => !appliedIds.has(j.id));
 
   return (
     <div>
@@ -117,66 +87,70 @@ export default function BrowseJobs() {
         </div>
       )}
 
-      {!loading && !error && jobs.length === 0 && (
+      {!loading && !error && visibleJobs.length === 0 && (
         <div className="empty-state">
           <h3>No jobs found</h3>
           <p>{query ? "Try a different search." : "Check back soon, or post the first role."}</p>
         </div>
       )}
 
-      {jobs.map((job) => {
-        const status = statusByJob[job.id];
-        const applied = Boolean(status);
-        return (
+      {visibleJobs.map((job) => (
           <div className="job" key={job.id}>
             <div className="job-head">
-              <div>
-                <h2 className="job-title"><Link className="job-title-link" to={`/jobs/${job.id}`}>{job.title}</Link></h2>
-                <div className="job-company">
-                  {job.company?.id ? (
-                    <Link className="job-company-link" to={`/company/${job.company.id}`}>{job.company.name}</Link>
-                  ) : (
-                    <span>{job.company?.name || job.company}</span>
-                  )}
-                  {" · "}{job.company?.location || job.location}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                {job.company?.logo ? (
+                  <img src={job.company.logo} alt="" className="logo-sm" />
+                ) : (
+                  <div className="logo-sm avatar-fallback">{(job.company?.name || "?").charAt(0).toUpperCase()}</div>
+                )}
+                <div>
+                  <h2 className="job-title"><Link className="job-title-link" to={`/jobs/${job.id}`}>{job.title}</Link></h2>
+                  <div className="job-company">
+                    {job.company?.id ? (
+                      <Link className="job-company-link" to={`/company/${job.company.id}`}>{job.company.name}</Link>
+                    ) : (
+                      <span>{job.company?.name || job.company}</span>
+                    )}
+                    {" · "}{job.company?.location || job.location}
+                  </div>
                 </div>
               </div>
-              <div className="job-id">{jobTicketId(job.id)}</div>
+              <div>
+                {job.company?.registered
+                  ? <span className="registered-badge">Registered</span>
+                  : <span className="registered-badge" style={{ background: "var(--gray-300)", color: "var(--gray-600)" }}>Unregistered</span>
+                }
+              </div>
             </div>
             <div className="job-tags">
-              {job.company?.type && <span className="tag">{job.company.type}</span>}
               <span className="tag dark">{job.type}</span>
-              <span className="tag">{job.mode}</span>
-              {job.salary && <span className="tag">{job.salary}</span>}
+              {job.salary_min || job.salary_max ? (
+                <span className="tag dark">
+                  {job.salary_currency || "INR"} {job.salary_min ? `${Number(job.salary_min).toLocaleString()}` : ""}
+                  {job.salary_min && job.salary_max ? " – " : ""}
+                  {job.salary_max ? `${Number(job.salary_max).toLocaleString()}` : ""}
+                </span>
+              ) : job.salary ? (
+                <span className="tag dark">{job.salary}</span>
+              ) : null}
             </div>
-            <p className="job-desc job-desc-truncated">
-              {job.description.length > 220 ? job.description.slice(0, 220).trimEnd() + "…" : job.description}
-              {job.description.length > 220 && (
-                <Link className="btn link" to={`/jobs/${job.id}`} style={{ marginLeft: 6 }}>Read more</Link>
-              )}
-            </p>
             <div className="job-foot">
               <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
+              {job.openings > 1 && <span className="job-meta">{job.openings} openings</span>}
+              {job.expires_at && new Date(job.expires_at) < new Date() && (
+                <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Applications closed</span>
+              )}
+              {job.expires_at && new Date(job.expires_at) > new Date() && (new Date(job.expires_at) - new Date()) < 3 * 24 * 60 * 60 * 1000 && (
+                <span className="tag" style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>Closing soon</span>
+              )}
               <div className="job-actions">
-                {applied && (status === "shortlisted" || status === "accepted") && (
-                  <>
-                    <span className={statusClass(status)}>{statusLabel(status)}</span>
-                    <button className="btn small outline" onClick={() => navigate(`/messages?job=${job.id}&with=${job.recruiter_id}`)}>
-                      Message recruiter
-                    </button>
-                  </>
-                )}
-                {applied && status !== "shortlisted" && status !== "accepted" && (
-                  <span className={statusClass(status)}>{statusLabel(status)}</span>
-                )}
-                {!applied && (
+                {!(job.expires_at && new Date(job.expires_at) < new Date()) && (
                   <button className="btn small" onClick={() => handleApplyClick(job)}>Apply now</button>
                 )}
               </div>
             </div>
           </div>
-        );
-      })}
+      ))}
 
       {totalPages > 1 && (
         <div className="pagination">
@@ -191,6 +165,7 @@ export default function BrowseJobs() {
           job={applyTarget}
           defaultName={user?.name}
           defaultEmail={user?.email}
+          defaultPhone={user?.phone}
           onClose={() => setApplyTarget(null)}
           onSubmit={submitApplication}
         />

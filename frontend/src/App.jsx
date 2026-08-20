@@ -47,7 +47,7 @@ export default function App() {
       <div className="shell">
         <Routes>
           <Route path="/" element={<LandingRedirect />} />
-          <Route path="/browse" element={<BrowseJobs />} />
+          <Route path="/browse" element={<RequireRole><BrowseJobs /></RequireRole>} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -123,9 +123,7 @@ export default function App() {
             path="/messages"
             element={
               <RequireRole>
-                <OnboardingGuard>
-                  <Messages />
-                </OnboardingGuard>
+                <Messages />
               </RequireRole>
             }
           />

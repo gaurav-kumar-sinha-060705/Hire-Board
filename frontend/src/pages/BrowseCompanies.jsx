@@ -1,14 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 
 export default function BrowseCompanies() {
+  const navigate = useNavigate();
   const [companies, setCompanies] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [expanded, setExpanded] = useState({});
 
   const load = useCallback(async (q, p) => {
     const data = await api.listCompanies(p, 12, q);
@@ -16,9 +18,7 @@ export default function BrowseCompanies() {
     setTotalPages(data.totalPages);
   }, []);
 
-  useEffect(() => {
-    setPage(1);
-  }, [query]);
+  useEffect(() => { setPage(1); }, [query]);
 
   useEffect(() => {
     setLoading(true);
@@ -27,6 +27,10 @@ export default function BrowseCompanies() {
       .catch(() => setError("Failed to load companies."))
       .finally(() => setLoading(false));
   }, [query, page, load]);
+
+  function toggleExpand(id) {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
 
   if (loading) return <div className="empty-state"><p>Loading…</p></div>;
 
@@ -60,20 +64,56 @@ export default function BrowseCompanies() {
         </div>
       )}
 
-      {!error && companies.map((c) => (
-        <Link className="company-card" key={c.id} to={`/company/${c.id}`}>
-          <div className="company-card-head">
-            <h2 className="company-card-name">{c.name}</h2>
-            <div className="job-id">{c.jobCount} open role{c.jobCount === 1 ? "" : "s"}</div>
+      {!error && companies.map((c) => {
+        const isExpanded = !!expanded[c.id];
+        const isLong = c.description && c.description.length > 160;
+        return (
+          <div
+            className={`company-card${isExpanded ? " expanded" : ""}`}
+            key={c.id}
+            style={{ cursor: "pointer" }}
+            onClick={(e) => { if (!e.target.closest(".show-more-btn")) navigate(`/company/${c.id}`); }}
+          >
+            <div className="company-card-head">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {c.logo ? (
+                  <img src={c.logo} alt={c.name} className="logo-sm" />
+                ) : (
+                  <div className="logo-sm avatar-fallback">{c.name?.charAt(0)?.toUpperCase() || "?"}</div>
+                )}
+                <h2 className="company-card-name">{c.name}</h2>
+              </div>
+              <div className="job-id" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {c.jobCount} open role{c.jobCount === 1 ? "" : "s"}
+                {c.registered
+                  ? <span className="registered-badge">Registered</span>
+                  : <span className="registered-badge" style={{ background: "var(--gray-300)", color: "var(--gray-600)" }}>Unregistered</span>
+                }
+              </div>
+            </div>
+            <div className="job-company">{c.location} · {c.type}{c.size ? ` · ${c.size}` : ""}</div>
+            {c.description && (
+              <>
+                <p className="job-desc" style={{ marginTop: 8 }}>
+                  {isLong && !isExpanded
+                    ? c.description.slice(0, 160).trimEnd() + "…"
+                    : c.description
+                  }
+                </p>
+                {isLong && (
+                  <button
+                    className="btn link show-more-btn"
+                    onClick={(e) => { e.stopPropagation(); toggleExpand(c.id); }}
+                    style={{ marginTop: 4, fontSize: 13, padding: 0 }}
+                  >
+                    {isExpanded ? "Show less" : "Show more"}
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          <div className="job-company">{c.location} · {c.type}{c.size ? ` · ${c.size}` : ""}</div>
-          {c.description && (
-            <p className="job-desc job-desc-truncated" style={{ marginTop: 8 }}>
-              {c.description.length > 160 ? c.description.slice(0, 160).trimEnd() + "…" : c.description}
-            </p>
-          )}
-        </Link>
-      ))}
+        );
+      })}
 
       {totalPages > 1 && (
         <div className="pagination">

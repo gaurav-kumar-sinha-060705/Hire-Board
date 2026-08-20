@@ -1,13 +1,16 @@
 import { useState } from "react";
 
-export default function ApplyModal({ job, defaultName, defaultEmail, onClose, onSubmit }) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export default function ApplyModal({ job, defaultName, defaultEmail, defaultPhone, onClose, onSubmit }) {
   const [name, setName] = useState(defaultName || "");
   const [email, setEmail] = useState(defaultEmail || "");
+  const [phone, setPhone] = useState(defaultPhone || "");
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [expectedSalary, setExpectedSalary] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -18,7 +21,7 @@ export default function ApplyModal({ job, defaultName, defaultEmail, onClose, on
     setLoading(true);
     setError("");
     try {
-      await onSubmit({ name, email, note });
+      await onSubmit({ name, email, note, phone, portfolio_url: portfolioUrl, expected_salary: expectedSalary ? Number(expectedSalary) : null });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,6 +42,18 @@ export default function ApplyModal({ job, defaultName, defaultEmail, onClose, on
           <div className="field">
             <label htmlFor="a-email">Email</label>
             <input id="a-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
+          </div>
+          <div className="field">
+            <label htmlFor="a-phone">Phone</label>
+            <input id="a-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+          </div>
+          <div className="field">
+            <label htmlFor="a-portfolio">Portfolio URL</label>
+            <input id="a-portfolio" type="url" value={portfolioUrl} onChange={(e) => setPortfolioUrl(e.target.value)} placeholder="https://yoursite.com" />
+          </div>
+          <div className="field">
+            <label htmlFor="a-salary">Expected salary</label>
+            <input id="a-salary" type="number" value={expectedSalary} onChange={(e) => setExpectedSalary(e.target.value)} placeholder="e.g. 1200000" />
           </div>
           <div className="field">
             <label htmlFor="a-note">Cover note (optional)</label>

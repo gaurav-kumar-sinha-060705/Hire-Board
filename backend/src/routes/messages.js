@@ -41,8 +41,17 @@ router.get("/conversations", authenticate, asyncHandler(async (req, res) => {
     }
   }
 
-  allowed.sort((a, b) => new Date(b.lastMessageAt || b.created_at) - new Date(a.lastMessageAt || a.created_at));
-  res.json({ conversations: allowed });
+  const enriched = await Promise.all(allowed.map(async (conv) => {
+    const otherId = conv.recruiter_id === req.user.id ? conv.seeker_id : conv.recruiter_id;
+    const other = await findUserById(otherId);
+    return {
+      ...conv,
+      other: other ? { id: other.id, name: other.name, role: other.role, avatar: other.avatar || null } : null,
+    };
+  }));
+
+  enriched.sort((a, b) => new Date(b.lastMessageAt || b.created_at) - new Date(a.lastMessageAt || a.created_at));
+  res.json({ conversations: enriched });
 }));
 
 // GET /api/messages/thread?jobId=&with=
@@ -64,7 +73,7 @@ router.get("/thread", authenticate, asyncHandler(async (req, res) => {
     return res.json({
       conversation: null,
       job: { id: job.id, title: job.title, company: job.company_name },
-      recipient: recipient ? { id: recipient.id, name: recipient.name, role: recipient.role, profile: profileSummary(recipient) } : null,
+      recipient: recipient ? { id: recipient.id, name: recipient.name, role: recipient.role, avatar: recipient.avatar || null, profile: profileSummary(recipient) } : null,
     });
   }
   if (!belongsTo(conv, req.user.id)) return res.status(403).json({ error: "This conversation isn't yours." });
@@ -77,7 +86,7 @@ router.get("/thread", authenticate, asyncHandler(async (req, res) => {
   res.json({
     conversation: {
       ...conv,
-      other: other ? { id: other.id, name: other.name, role: other.role, profile: profileSummary(other) } : null,
+      other: other ? { id: other.id, name: other.name, role: other.role, avatar: other.avatar || null, profile: profileSummary(other) } : null,
       jobTitle: job.title,
       jobCompany: job.company_name,
       lastMessage: messages.length > 0 ? messages[messages.length - 1].body : "",
@@ -104,7 +113,7 @@ router.get("/:id", authenticate, asyncHandler(async (req, res) => {
   res.json({
     conversation: {
       ...conv,
-      other: other ? { id: other.id, name: other.name, role: other.role, profile: profileSummary(other) } : null,
+      other: other ? { id: other.id, name: other.name, role: other.role, avatar: other.avatar || null, profile: profileSummary(other) } : null,
       jobTitle: job?.title || "Deleted posting",
       jobCompany: job?.company_name || "",
       lastMessage: messages.length > 0 ? messages[messages.length - 1].body : "",
@@ -164,7 +173,7 @@ router.post("/", authenticate, asyncHandler(async (req, res) => {
   res.status(201).json({
     conversation: {
       ...conv,
-      other: other ? { id: other.id, name: other.name, role: other.role, profile: profileSummary(other) } : null,
+      other: other ? { id: other.id, name: other.name, role: other.role, avatar: other.avatar || null, profile: profileSummary(other) } : null,
       jobTitle: job?.title || "Deleted posting",
       jobCompany: job?.company_name || "",
       lastMessage: message.body,

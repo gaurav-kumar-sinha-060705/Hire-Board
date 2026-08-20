@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { statusLabel, statusClass } from "../status.js";
-import { jobTicketId } from "../utils.js";
+
 
 export default function MyApplications() {
   const { token } = useAuth();
@@ -60,7 +60,6 @@ export default function MyApplications() {
                 ) : "This posting is no longer available"}
               </div>
             </div>
-            <div className="job-id">{a.job ? jobTicketId(a.job.id) : "—"}</div>
           </div>
           <div className="job-foot">
             <span className="job-meta">Applied {new Date(a.applied_at).toLocaleDateString()}</span>

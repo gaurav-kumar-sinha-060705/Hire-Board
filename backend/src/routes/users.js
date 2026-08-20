@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { findUserById, updateUserProfile } from "../db.js";
+import { findUserById, updateUserProfile, updateUserFields, updateUserCompany } from "../db.js";
 import { getSupabase } from "../supabase.js";
 import { authenticate } from "../middleware/auth.js";
-import { publicUser, asyncHandler } from "../utils.js";
+import { publicUser, asyncHandler, cleanString, cleanUrl, dataUrlBytes } from "../utils.js";
 
 const router = Router();
 
@@ -29,16 +29,16 @@ async function canViewSeeker(requester, target) {
   return count > 0;
 }
 
-function dataUrlBytes(dataUrl) {
-  const comma = dataUrl.indexOf(",");
-  const b64 = comma === -1 ? dataUrl : dataUrl.slice(comma + 1);
-  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
-  return Math.floor((b64.length * 3) / 4) - pad;
-}
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 function cleanSkills(input) {
   const list = Array.isArray(input) ? input : typeof input === "string" ? input.split(",") : [];
   return list.map((s) => String(s).trim()).filter(Boolean).slice(0, 20).map((s) => s.slice(0, 40));
+}
+
+function cleanArray(arr, maxItems, itemFn) {
+  if (!Array.isArray(arr)) return [];
+  return arr.slice(0, maxItems).map(itemFn).filter(Boolean);
 }
 
 // PUT /api/users/me/profile
@@ -49,20 +49,90 @@ router.put("/me/profile", authenticate, asyncHandler(async (req, res) => {
   const profile = user.profile || {};
   const { headline, company, location, experience, bio, linkedin } = req.body;
 
-  if (headline !== undefined) profile.headline = String(headline).trim().slice(0, 120);
-  if (company !== undefined) profile.company = String(company).trim().slice(0, 120);
-  if (location !== undefined) profile.location = String(location).trim().slice(0, 120);
-  if (experience !== undefined) profile.experience = String(experience).trim().slice(0, 2000);
-  if (bio !== undefined) profile.bio = String(bio).trim().slice(0, 2000);
-  if (linkedin !== undefined) {
-    let value = String(linkedin).trim().slice(0, 200);
-    if (value && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = "https://" + value;
-    profile.linkedin = value;
-  }
+  if (headline !== undefined) profile.headline = cleanString(headline, 120);
+  if (company !== undefined) profile.company = cleanString(company, 120);
+  if (location !== undefined) profile.location = cleanString(location, 120);
+  if (experience !== undefined) profile.experience = cleanString(experience, 2000);
+  if (bio !== undefined) profile.bio = cleanString(bio, 2000);
+  if (linkedin !== undefined) profile.linkedin = cleanUrl(linkedin, 200);
   if (req.body.skills !== undefined) profile.skills = cleanSkills(req.body.skills);
   profile.updatedAt = new Date().toISOString();
 
   await updateUserProfile(req.user.id, profile);
+
+  if (user.role === "recruiter" && company !== undefined) {
+    const name = cleanString(company, 120);
+    if (name) await updateUserCompany(req.user.id, name);
+  }
+
+  const topFields = {};
+
+  if (req.body.phone !== undefined) topFields.phone = cleanString(req.body.phone, 20);
+
+  if (req.body.portfolio_url !== undefined) topFields.portfolio_url = cleanUrl(req.body.portfolio_url, 200);
+
+  if (req.body.avatar !== undefined) {
+    const avatar = req.body.avatar;
+    if (avatar && typeof avatar === "string") {
+      if (!avatar.startsWith("data:image/")) return res.status(400).json({ error: "Invalid avatar format." });
+      if (dataUrlBytes(avatar) > MAX_AVATAR_BYTES) return res.status(400).json({ error: "Avatar must be under 2 MB." });
+    }
+    topFields.avatar = avatar || null;
+  }
+
+  if (req.body.education !== undefined) {
+    topFields.education = cleanArray(req.body.education, 10, (e) => ({
+      school: cleanString(e.school, 120),
+      degree: cleanString(e.degree, 120),
+      field: cleanString(e.field, 120),
+      startYear: Number(e.startYear) || null,
+      endYear: Number(e.endYear) || null,
+      grade: cleanString(e.grade, 40),
+    }));
+  }
+
+  if (req.body.work_experience !== undefined) {
+    topFields.work_experience = cleanArray(req.body.work_experience, 10, (w) => ({
+      company: cleanString(w.company, 120),
+      title: cleanString(w.title, 120),
+      startDate: cleanString(w.startDate, 10),
+      endDate: w.current ? "" : cleanString(w.endDate, 10),
+      current: Boolean(w.current),
+      description: cleanString(w.description, 2000),
+    }));
+  }
+
+  if (req.body.certifications !== undefined) {
+    topFields.certifications = cleanArray(req.body.certifications, 10, (c) => ({
+      name: cleanString(c.name, 120),
+      issuer: cleanString(c.issuer, 120),
+      date: cleanString(c.date, 10),
+      url: cleanUrl(c.url, 200),
+    }));
+  }
+
+  if (req.body.languages !== undefined) {
+    topFields.languages = cleanArray(req.body.languages, 10, (l) => ({
+      language: cleanString(l.language, 60),
+      proficiency: cleanString(l.proficiency, 40),
+    }));
+  }
+
+  if (req.body.job_preferences !== undefined) {
+    const jp = req.body.job_preferences || {};
+    topFields.job_preferences = {
+      jobTypes: cleanArray(jp.jobTypes, 5, (v) => cleanString(v, 20)),
+      workMode: cleanArray(jp.workMode, 5, (v) => cleanString(v, 20)),
+      salaryMin: Number(jp.salaryMin) || null,
+      salaryMax: Number(jp.salaryMax) || null,
+      locations: cleanArray(jp.locations, 10, (v) => cleanString(v, 120)),
+    };
+  }
+
+  if (Object.keys(topFields).length > 0) {
+    await updateUserFields(req.user.id, topFields);
+  }
+
   const updated = await findUserById(req.user.id);
   res.json({ user: publicUser(updated) });
 }));

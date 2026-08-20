@@ -5,7 +5,8 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 import ApplyModal from "../components/ApplyModal.jsx";
 import { statusLabel, statusClass } from "../status.js";
-import { jobTicketId } from "../utils.js";
+import { canApply, submitApplication as submitApplicationFn } from "../applyGuard.js";
+
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -40,45 +41,15 @@ export default function JobDetail() {
   }, [user, token, id]);
 
   function handleApplyClick() {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    if (user.role !== "seeker") {
-      showToast("Sign in as a job seeker to apply.");
-      return;
-    }
-    if (!user.email_verified) {
-      showToast("Verify your email to apply.");
-      navigate("/verify-email");
-      return;
-    }
-    if (!user.profile?.headline || !user.profile?.skills || user.profile.skills.length === 0) {
-      showToast("Complete your profile to apply.");
-      navigate("/profile");
-      return;
-    }
+    if (!canApply(user, navigate, showToast)) return;
     setApplyOpen(true);
   }
 
   async function submitApplication(payload) {
-    try {
-      await api.applyToJob(job.id, payload, token);
+    const success = await submitApplicationFn(job.id, payload, token, navigate, showToast);
+    if (success) {
       setStatus("applied");
       setApplyOpen(false);
-      showToast("Application submitted.");
-    } catch (err) {
-      if (/verify/i.test(err.message)) {
-        setApplyOpen(false);
-        showToast("Verify your email to apply.");
-        navigate("/verify-email");
-      } else if (/profile/i.test(err.message)) {
-        setApplyOpen(false);
-        showToast("Complete your profile to apply.");
-        navigate("/profile");
-      } else {
-        throw err;
-      }
     }
   }
 
@@ -99,18 +70,30 @@ export default function JobDetail() {
     <div>
       <div className="eyebrow"><button className="btn link" onClick={() => navigate(-1)}>← Back</button></div>
       <div className="job-head" style={{ marginTop: 12 }}>
-        <div>
-          <h1 className="page-title" style={{ fontSize: 26 }}>{job.title}</h1>
-          <div className="job-company">
-            {job.company?.id ? (
-              <Link className="job-company-link" to={`/company/${job.company.id}`}>{job.company.name}</Link>
-            ) : (
-              <span>{job.company?.name || job.company}</span>
-            )}
-            {" · "}{job.company?.location || job.location}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          {job.company?.logo ? (
+            <img src={job.company.logo} alt="" className="logo-md" />
+          ) : (
+            <div className="logo-md avatar-fallback">{(job.company?.name || "?").charAt(0).toUpperCase()}</div>
+          )}
+          <div>
+            <h1 className="page-title" style={{ fontSize: 26 }}>{job.title}</h1>
+            <div className="job-company">
+              {job.company?.id ? (
+                <Link className="job-company-link" to={`/company/${job.company.id}`}>{job.company.name}</Link>
+              ) : (
+                <span>{job.company?.name || job.company}</span>
+              )}
+              {" · "}{job.company?.location || job.location}
+            </div>
           </div>
         </div>
-        <div className="job-id">{jobTicketId(job.id)}</div>
+        <div>
+          {job.company?.registered
+            ? <span className="registered-badge">Registered</span>
+            : <span className="registered-badge" style={{ background: "var(--gray-300)", color: "var(--gray-600)" }}>Unregistered</span>
+          }
+        </div>
       </div>
 
       <div className="job-tags">
@@ -118,11 +101,36 @@ export default function JobDetail() {
         {job.is_active === false && <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Closed</span>}
         <span className="tag dark">{job.type}</span>
         <span className="tag">{job.mode}</span>
-        {job.salary && <span className="tag">{job.salary}</span>}
+        {job.experience_level && <span className="tag">{job.experience_level}</span>}
+        {job.salary_min || job.salary_max ? (
+          <span className="tag dark">
+            {job.salary_currency || "INR"} {job.salary_min ? `${Number(job.salary_min).toLocaleString()}` : ""}
+            {job.salary_min && job.salary_max ? " – " : ""}
+            {job.salary_max ? `${Number(job.salary_max).toLocaleString()}` : ""}
+          </span>
+        ) : job.salary ? (
+          <span className="tag dark">{job.salary}</span>
+        ) : null}
+        {job.required_skills?.length > 0 && (
+          <>
+            {job.required_skills.slice(0, 3).map((s) => <span className="tag" key={s}>{s}</span>)}
+            {job.required_skills.length > 3 && <span className="tag">+{job.required_skills.length - 3} more</span>}
+          </>
+        )}
       </div>
 
       <div className="job-foot">
         <span className="job-meta">Posted {new Date(job.posted_at).toLocaleDateString()}</span>
+        {job.openings > 1 && <span className="job-meta">{job.openings} openings</span>}
+        {job.expires_at && (
+          <span className="job-meta">Expires {new Date(job.expires_at).toLocaleDateString()}</span>
+        )}
+        {job.expires_at && new Date(job.expires_at) < new Date() && (
+          <span className="tag" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>Applications closed</span>
+        )}
+        {job.expires_at && new Date(job.expires_at) > new Date() && (new Date(job.expires_at) - new Date()) < 3 * 24 * 60 * 60 * 1000 && (
+          <span className="tag" style={{ borderColor: "#f59e0b", color: "#f59e0b" }}>Closing soon</span>
+        )}
         {isOwner && <span className="job-meta">{job.applicantCount} applicant{job.applicantCount === 1 ? "" : "s"}</span>}
       </div>
 
@@ -143,7 +151,18 @@ export default function JobDetail() {
           <div className="profile-label">About the company</div>
           <div className="company-info-block">
             <div className="company-info-head">
-              <h3 className="company-info-name">{job.company.name}</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {job.company.logo ? (
+                  <img src={job.company.logo} alt="" className="logo-sm" />
+                ) : (
+                  <div className="logo-sm avatar-fallback">{(job.company.name || "?").charAt(0).toUpperCase()}</div>
+                )}
+                <h3 className="company-info-name">{job.company.name}</h3>
+                {job.company.registered
+                  ? <span className="registered-badge">Registered</span>
+                  : <span className="registered-badge" style={{ background: "var(--gray-300)", color: "var(--gray-600)" }}>Unregistered</span>
+                }
+              </div>
               <Link className="btn small outline" to={`/company/${job.company.id}`}>View company profile</Link>
             </div>
             <div className="job-tags" style={{ marginTop: 8 }}>
@@ -168,12 +187,19 @@ export default function JobDetail() {
           {team.map((member) => (
             <div className="company-info-block" key={member.id} style={{ marginBottom: 12 }}>
               <div className="company-info-head">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{member.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {member.avatar ? (
+                    <img src={member.avatar} alt={member.name} className="avatar-sm" />
+                  ) : (
+                    <div className="avatar-sm avatar-fallback">{member.name?.charAt(0)?.toUpperCase() || "?"}</div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{member.name}</div>
                   {member.headline && <div style={{ fontSize: 13, color: "var(--gray-700)" }}>{member.headline}</div>}
                   {member.location && <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 2 }}>{member.location}</div>}
                 </div>
-                <span className={statusClass(member.status)}>{statusLabel(member.status)}</span>
+                    <span className={statusClass(member.status)}>{statusLabel(member.status)}</span>
+                </div>
               </div>
               {member.skills?.length > 0 && (
                 <div className="job-tags" style={{ marginTop: 8 }}>
@@ -198,7 +224,7 @@ export default function JobDetail() {
               )}
             </>
           )}
-          {!status && !isOwner && job.is_active !== false && (
+          {!status && !isOwner && job.is_active !== false && !(job.expires_at && new Date(job.expires_at) < new Date()) && (
             <button className="btn" onClick={handleApplyClick}>Apply now</button>
           )}
           {job.is_active === false && !status && !isOwner && (
@@ -212,6 +238,7 @@ export default function JobDetail() {
           job={job}
           defaultName={user?.name}
           defaultEmail={user?.email}
+          defaultPhone={user?.phone}
           onClose={() => setApplyOpen(false)}
           onSubmit={submitApplication}
         />
