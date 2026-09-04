@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
-import cron from "node-cron";
 import authRoutes from "./routes/auth.js";
 import companyRoutes from "./routes/companies.js";
 import jobRoutes from "./routes/jobs.js";
@@ -10,7 +9,6 @@ import userRoutes from "./routes/users.js";
 import messageRoutes from "./routes/messages.js";
 import notificationRoutes from "./routes/notifications.js";
 import statsRoutes from "./routes/stats.js";
-import { runImport } from "./services/jobImporter.js";
 
 dotenv.config();
 
@@ -55,15 +53,4 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Job portal API running on http://localhost:${PORT}`);
-
-  // Run job import on startup
-  runImport().catch((err) => console.error("[Startup] Import failed:", err.message));
-
-  // Schedule every 6 hours
-  cron.schedule("0 */6 * * *", () => {
-    console.log("[Cron] Starting scheduled job import...");
-    runImport().catch((err) => console.error("[Cron] Import failed:", err.message));
-  });
-
-  console.log("[Cron] Job import scheduled every 6 hours");
 });
