@@ -225,7 +225,11 @@ export default function JobDetail() {
             </>
           )}
           {!status && !isOwner && job.is_active !== false && !(job.expires_at && new Date(job.expires_at) < new Date()) && (
-            <button className="btn" onClick={handleApplyClick}>Apply now</button>
+            job.source === "remoteok" ? (
+              <a className="btn" href={job.external_url || `https://remoteok.com/remote-jobs/${job.external_id}`} target="_blank" rel="noopener noreferrer">Apply on RemoteOK ↗</a>
+            ) : (
+              <button className="btn" onClick={handleApplyClick}>Apply now</button>
+            )
           )}
           {job.is_active === false && !status && !isOwner && (
             <span className="job-meta">This posting is no longer accepting applications.</span>

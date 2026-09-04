@@ -199,7 +199,11 @@ export default function BrowseJobs() {
               )}
               <div className="job-actions">
                 {!(job.expires_at && new Date(job.expires_at) < new Date()) && (
-                  <button className="btn small" onClick={() => handleApplyClick(job)}>Apply now</button>
+                  job.source === "remoteok" ? (
+                    <a className="btn small" href={job.external_url || `https://remoteok.com/remote-jobs/${job.external_id}`} target="_blank" rel="noopener noreferrer">Apply on RemoteOK ↗</a>
+                  ) : (
+                    <button className="btn small" onClick={() => handleApplyClick(job)}>Apply now</button>
+                  )
                 )}
               </div>
             </div>
