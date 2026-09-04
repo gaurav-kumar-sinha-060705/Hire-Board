@@ -99,7 +99,6 @@ router.post("/resend-otp", authLimiter, asyncHandler(async (req, res) => {
 
   res.json({
     message: "Verification code sent.",
-    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
   });
 }));
 
@@ -117,7 +116,7 @@ router.post("/forgot-password", authLimiter, asyncHandler(async (req, res) => {
     return res.status(429).json({ error: err.message });
   }
 
-  const emailResult = await sendVerificationEmail(email, otp);
+  const emailResult = await sendVerificationEmail(email, otp, "reset-password");
 
   if (emailResult.limited) {
     return res.status(429).json({ error: "Daily email limit reached. Try again tomorrow." });
@@ -129,7 +128,6 @@ router.post("/forgot-password", authLimiter, asyncHandler(async (req, res) => {
 
   res.json({
     message: "If an account exists, a reset code has been sent.",
-    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
   });
 }));
 

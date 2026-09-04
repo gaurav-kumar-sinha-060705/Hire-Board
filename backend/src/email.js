@@ -119,10 +119,10 @@ export async function verifyEmailOTP(email, otp, purpose = "verify") {
   return data.user_id;
 }
 
-export async function sendVerificationEmail(email, otp) {
+export async function sendVerificationEmail(email, otp, purpose = "verify") {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.log(`[DEV] Verification OTP for ${email}: ${otp}`);
+    console.log(`[DEV] ${purpose === "reset-password" ? "Password reset" : "Verification"} OTP for ${email}: ${otp}`);
     return { dev: true, otp };
   }
 
@@ -131,16 +131,22 @@ export async function sendVerificationEmail(email, otp) {
     const resend = new Resend(apiKey);
     const from = process.env.FROM_EMAIL || "otp@hireboard.dpdns.org";
 
+    const isReset = purpose === "reset-password";
+    const subject = isReset
+      ? "Reset your password — Hire Board"
+      : "Verify your email — Hire Board";
+    const heading = isReset ? "password reset" : "verification";
+
     const result = await resend.emails.send({
       from: `Hire Board <${from}>`,
       to: email,
-      subject: "Verify your email — Hire Board",
-      text: `Your Hire Board verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't create an account, you can ignore this email.`,
+      subject,
+      text: `Your Hire Board ${heading} code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email.`,
       html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <p>Your Hire Board verification code is:</p>
+        <p>Your Hire Board ${heading} code is:</p>
         <p style="font-size:24px;font-weight:bold">${otp}</p>
         <p>This code expires in 10 minutes.</p>
-        <p style="color:#777;font-size:13px">If you didn't create an account, you can ignore this email.</p>
+        <p style="color:#777;font-size:13px">If you didn't request this, you can ignore this email.</p>
       </div>`,
     });
 

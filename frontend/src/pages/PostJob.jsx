@@ -23,10 +23,6 @@ export default function PostJob() {
   const [loading, setLoading] = useState(false);
   const [loadingJob, setLoadingJob] = useState(Boolean(editingId));
   const [skillsInput, setSkillsInput] = useState("");
-  const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [verifyOtp, setVerifyOtp] = useState("");
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [verifyError, setVerifyError] = useState("");
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -34,8 +30,7 @@ export default function PostJob() {
 
   useEffect(() => {
     if (!user?.email_verified && !editingId) {
-      setShowVerifyModal(true);
-      sendOtp();
+      navigate("/verify-email");
     }
   }, [user]);
 
@@ -95,41 +90,10 @@ export default function PostJob() {
     });
   }
 
-  async function sendOtp() {
-    try {
-      const data = await api.resendOtp({ email: user.email });
-      if (import.meta.env.DEV && data.devOtp) {
-        setVerifyError(`Dev OTP: ${data.devOtp}`);
-        setVerifyError("");
-      }
-    } catch (err) {
-      setVerifyError(err.message);
-    }
-  }
-
-  async function handleVerifySubmit(e) {
-    e.preventDefault();
-    if (!verifyOtp.trim() || verifyOtp.length !== 6) {
-      setVerifyError("Enter the 6-digit code.");
-      return;
-    }
-    setVerifyLoading(true);
-    setVerifyError("");
-    try {
-      await api.verifyEmail({ email: user.email, otp: verifyOtp });
-      window.location.reload();
-    } catch (err) {
-      setVerifyError(err.message);
-    } finally {
-      setVerifyLoading(false);
-    }
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
     if (!user?.email_verified) {
-      setShowVerifyModal(true);
-      sendOtp();
+      navigate("/verify-email");
       return;
     }
     if (!form.title.trim() || !form.companyId || !form.location.trim() || !form.description.trim()) {
@@ -151,8 +115,7 @@ export default function PostJob() {
       navigate("/my-jobs");
     } catch (err) {
       if (err.message && /verify/i.test(err.message)) {
-        setShowVerifyModal(true);
-        sendOtp();
+        navigate("/verify-email");
       } else if (err.message && /register your company/i.test(err.message)) {
         showToast("Register your company first.");
         navigate("/register-company");
@@ -300,40 +263,6 @@ export default function PostJob() {
           {loading ? "Saving…" : editingId ? "Save changes" : "Post job"}
         </button>
       </form>
-
-      {showVerifyModal && (
-        <div className="modal-overlay" onClick={() => setShowVerifyModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Verify your email</h3>
-            <p className="modal-sub">Enter the 6-digit code sent to <strong>{user?.email}</strong></p>
-            <form onSubmit={handleVerifySubmit}>
-              <div className="field">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={verifyOtp}
-                  onChange={(e) => setVerifyOtp(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000000"
-                  style={{ letterSpacing: 6, textAlign: "center", fontSize: 20, fontWeight: 600 }}
-                />
-              </div>
-              {verifyError && <div className="error-text">{verifyError}</div>}
-              <div className="modal-actions">
-                <button type="button" className="btn outline" onClick={() => setShowVerifyModal(false)}>Cancel</button>
-                <button type="submit" className="btn" disabled={verifyLoading}>
-                  {verifyLoading ? "Verifying..." : "Verify"}
-                </button>
-              </div>
-            </form>
-            <p className="center-note" style={{ marginTop: 12 }}>
-              <button className="btn link" onClick={sendOtp} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gray-600)", textDecoration: "underline" }}>
-                Resend code
-              </button>
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

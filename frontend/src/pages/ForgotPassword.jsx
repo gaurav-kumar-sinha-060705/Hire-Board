@@ -8,6 +8,7 @@ export default function ForgotPassword() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [note, setNote] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -17,10 +18,11 @@ export default function ForgotPassword() {
     }
     setLoading(true);
     setError("");
+    setNote("");
     try {
-      await api.forgotPassword({ email });
+      const data = await api.forgotPassword({ email });
       setSent(true);
-      setTimeout(() => navigate(`/reset-password?email=${encodeURIComponent(email)}`), 1500);
+      setNote(data.message || "If an account exists, a reset code has been sent.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,7 +35,17 @@ export default function ForgotPassword() {
       <div className="panel panel-narrow">
         <div className="eyebrow">Check your inbox</div>
         <h1 className="page-title" style={{ marginBottom: 24 }}>Code sent</h1>
-        <p className="page-sub">We sent a reset code to <strong>{email}</strong>. Redirecting…</p>
+        <p className="page-sub">We sent a reset code to <strong>{email}</strong>. Check your inbox, then continue below.</p>
+        {!!note && <p className="page-sub" style={{ color: "var(--gray-500)", fontSize: 13 }}>{note}</p>}
+        <button className="btn full" style={{ marginTop: 16 }} onClick={() => navigate(`/reset-password?email=${encodeURIComponent(email)}`)}>
+          I have the code — continue
+        </button>
+        <p className="center-note">
+          Didn't get it? <button className="btn link" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gray-600)", textDecoration: "underline" }} onClick={handleSubmit} disabled={loading}>Resend code</button>
+        </p>
+        <p className="center-note">
+          <Link className="btn link" to="/login">Back to sign in</Link>
+        </p>
       </div>
     );
   }
