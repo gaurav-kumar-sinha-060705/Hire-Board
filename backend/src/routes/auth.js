@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { findUserByEmail, findUserById, createUser } from "../db.js";
+import { findUserByEmail, findUserById, createUser, updateUserFields } from "../db.js";
 import { createEmailOTP, verifyEmailOTP, sendVerificationEmail } from "../email.js";
 import { authenticate } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
@@ -101,6 +101,51 @@ router.post("/resend-otp", authLimiter, asyncHandler(async (req, res) => {
     message: "Verification code sent.",
     ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
   });
+}));
+
+router.post("/forgot-password", authLimiter, asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email." });
+
+  const user = await findUserByEmail(email);
+  if (!user) return res.status(200).json({ message: "If an account exists, a reset code has been sent." });
+
+  let otp;
+  try {
+    otp = await createEmailOTP(email, user.id, "reset-password");
+  } catch (err) {
+    return res.status(429).json({ error: err.message });
+  }
+
+  const emailResult = await sendVerificationEmail(email, otp);
+
+  if (emailResult.limited) {
+    return res.status(429).json({ error: "Daily email limit reached. Try again tomorrow." });
+  }
+
+  if (emailResult.bounced) {
+    return res.status(502).json({ error: "Email delivery failed. Please try a different email address or contact support." });
+  }
+
+  res.json({
+    message: "If an account exists, a reset code has been sent.",
+    ...(emailResult.dev ? { devOtp: emailResult.otp } : {}),
+  });
+}));
+
+router.post("/reset-password", authLimiter, asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) return res.status(400).json({ error: "Email, OTP, and new password are required." });
+  if (newPassword.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+  if (newPassword.length > 128) return res.status(400).json({ error: "Password must be under 128 characters." });
+
+  const userId = await verifyEmailOTP(email, otp, "reset-password");
+  if (!userId) return res.status(400).json({ error: "Invalid or expired reset code." });
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  await updateUserFields(userId, { password: hashed });
+
+  res.json({ message: "Password reset successfully. You can now sign in." });
 }));
 
 export default router;

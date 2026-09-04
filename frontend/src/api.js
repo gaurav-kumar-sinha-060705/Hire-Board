@@ -21,6 +21,8 @@ export const api = {
   me: (token) => request("/auth/me", { token }),
   verifyEmail: (payload) => request("/auth/verify-email", { method: "POST", body: payload }),
   resendOtp: (payload) => request("/auth/resend-otp", { method: "POST", body: payload }),
+  forgotPassword: (payload) => request("/auth/forgot-password", { method: "POST", body: payload }),
+  resetPassword: (payload) => request("/auth/reset-password", { method: "POST", body: payload }),
 
   createCompany: (payload, token) => request("/companies", { method: "POST", body: payload, token }),
   updateCompany: (id, payload, token) => request(`/companies/${id}`, { method: "PUT", body: payload, token }),
