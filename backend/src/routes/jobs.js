@@ -146,10 +146,10 @@ router.get("/:id", asyncHandler(async (req, res) => {
 // POST /api/jobs
 router.post("/", authenticate, authorize("recruiter"), asyncHandler(async (req, res) => {
   const fullUser = await findUserById(req.user.id);
-  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email before posting a job." });
+  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email before posting a job.", requiresVerification: true });
   const existingCompany = await findCompanyByRecruiterId(req.user.id);
-  if (!existingCompany) return res.status(403).json({ error: "Register your company first." });
-  if (!fullUser.profile?.headline) return res.status(403).json({ error: "Complete your profile first." });
+  if (!existingCompany) return res.status(403).json({ error: "Register your company first.", requiresCompany: true });
+  if (!fullUser.profile?.headline) return res.status(403).json({ error: "Complete your profile first.", requiresProfile: true });
 
   const result = await validateJob(req.body, req.user.id);
   if (result.error) return res.status(400).json({ error: result.error });
@@ -245,9 +245,9 @@ router.post("/:id/apply", authenticate, authorize("seeker"), asyncHandler(async 
   }
 
   const fullUser = await findUserById(req.user.id);
-  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email to apply." });
+  if (!fullUser.email_verified) return res.status(403).json({ error: "Verify your email to apply.", requiresVerification: true });
   if (!fullUser.profile?.headline || !fullUser.profile?.skills || fullUser.profile.skills.length === 0) {
-    return res.status(403).json({ error: "Complete your profile to apply." });
+    return res.status(403).json({ error: "Complete your profile to apply.", requiresProfile: true });
   }
 
   const { name, email, note, phone, portfolio_url, expected_salary } = req.body;

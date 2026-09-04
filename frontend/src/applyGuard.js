@@ -10,14 +10,10 @@ export function canApply(user, navigate, showToast) {
     return false;
   }
   if (!user.email_verified) {
-    showToast("Verify your email to apply.");
-    navigate("/verify-email");
-    return false;
+    return "verify";
   }
   if (!user.profile?.headline || !user.profile?.skills || user.profile.skills.length === 0) {
-    showToast("Complete your profile to apply.");
-    navigate("/profile");
-    return false;
+    return "profile";
   }
   return true;
 }
@@ -28,15 +24,14 @@ export async function submitApplication(jobId, payload, token, navigate, showToa
     showToast("Application submitted.");
     return true;
   } catch (err) {
-    if (/verify/i.test(err.message)) {
-      showToast("Verify your email to apply.");
-      navigate("/verify-email");
-    } else if (/profile/i.test(err.message)) {
+    if (err.message && /verify/i.test(err.message)) {
+      return "verify";
+    } else if (err.message && /profile/i.test(err.message)) {
       showToast("Complete your profile to apply.");
       navigate("/profile");
+      return false;
     } else {
       throw err;
     }
-    return false;
   }
 }

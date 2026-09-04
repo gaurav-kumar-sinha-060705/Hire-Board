@@ -19,6 +19,11 @@ export default function BrowseJobs() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [appliedIds, setAppliedIds] = useState(new Set());
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyOtp, setVerifyOtp] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [verifySent, setVerifySent] = useState(false);
 
   useEffect(() => {
     if (user?.role === "seeker" && token) {
@@ -50,13 +55,62 @@ export default function BrowseJobs() {
   }, [query, page, loadJobs]);
 
   function handleApplyClick(job) {
-    if (!canApply(user, navigate, showToast)) return;
+    const check = canApply(user, navigate, showToast);
+    if (check === "verify") {
+      setApplyTarget(job);
+      openVerifyModal();
+      return;
+    }
+    if (!check) return;
     setApplyTarget(job);
   }
 
+  function openVerifyModal() {
+    setShowVerifyModal(true);
+    setVerifyOtp("");
+    setVerifyError("");
+    setVerifySent(false);
+    sendOtp();
+  }
+
+  async function sendOtp() {
+    try {
+      const data = await api.resendOtp({ email: user.email });
+      setVerifySent(true);
+      if (import.meta.env.DEV && data.devOtp) {
+        setVerifyError(`Dev OTP: ${data.devOtp}`);
+        setVerifyError("");
+      }
+    } catch (err) {
+      setVerifyError(err.message);
+    }
+  }
+
+  async function handleVerifySubmit(e) {
+    e.preventDefault();
+    if (!verifyOtp.trim() || verifyOtp.length !== 6) {
+      setVerifyError("Enter the 6-digit code.");
+      return;
+    }
+    setVerifyLoading(true);
+    setVerifyError("");
+    try {
+      await api.verifyEmail({ email: user.email, otp: verifyOtp });
+      window.location.reload();
+    } catch (err) {
+      setVerifyError(err.message);
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
+
   async function submitApplication(payload) {
-    const success = await submitApplicationFn(applyTarget.id, payload, token, navigate, showToast);
-    if (success) {
+    const result = await submitApplicationFn(applyTarget.id, payload, token, navigate, showToast);
+    if (result === "verify") {
+      openVerifyModal();
+      return;
+    }
+    if (result === true) {
       setAppliedIds((prev) => new Set([...prev, applyTarget.id]));
       setApplyTarget(null);
     }
@@ -169,6 +223,40 @@ export default function BrowseJobs() {
           onClose={() => setApplyTarget(null)}
           onSubmit={submitApplication}
         />
+      )}
+
+      {showVerifyModal && (
+        <div className="modal-overlay" onClick={() => setShowVerifyModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Verify your email</h3>
+            <p className="modal-sub">Enter the 6-digit code sent to <strong>{user?.email}</strong></p>
+            <form onSubmit={handleVerifySubmit}>
+              <div className="field">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verifyOtp}
+                  onChange={(e) => setVerifyOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  style={{ letterSpacing: 6, textAlign: "center", fontSize: 20, fontWeight: 600 }}
+                />
+              </div>
+              {verifyError && <div className="error-text">{verifyError}</div>}
+              <div className="modal-actions">
+                <button type="button" className="btn outline" onClick={() => setShowVerifyModal(false)}>Cancel</button>
+                <button type="submit" className="btn" disabled={verifyLoading}>
+                  {verifyLoading ? "Verifying..." : "Verify"}
+                </button>
+              </div>
+            </form>
+            <p className="center-note" style={{ marginTop: 12 }}>
+              <button className="btn link" onClick={sendOtp} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gray-600)", textDecoration: "underline" }}>
+                Resend code
+              </button>
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

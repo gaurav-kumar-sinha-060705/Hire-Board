@@ -274,6 +274,90 @@ export async function deleteJob(id) {
   if (error) throw error;
 }
 
+// ── Imported Jobs ─────────────────────────────────────
+
+export async function upsertImportedJob(job) {
+  const supabase = getSupabase();
+  const { data: existing } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("external_id", job.external_id)
+    .eq("source", job.source)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        title: job.title,
+        company_name: job.company_name,
+        location: job.location,
+        type: job.type,
+        mode: job.mode,
+        description: job.description,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_currency: job.salary_currency,
+        required_skills: job.required_skills,
+        is_active: true,
+      })
+      .eq("id", existing.id);
+    if (error) throw error;
+    return { action: "updated", id: existing.id };
+  } else {
+    const { data, error } = await supabase
+      .from("jobs")
+      .insert({
+        title: job.title,
+        company_id: job.company_id,
+        company_name: job.company_name,
+        location: job.location,
+        type: job.type,
+        mode: job.mode,
+        salary: "",
+        description: job.description,
+        requirements: "",
+        recruiter_id: job.recruiter_id,
+        recruiter_name: job.recruiter_name,
+        is_active: true,
+        experience_level: null,
+        salary_min: job.salary_min,
+        salary_max: job.salary_max,
+        salary_currency: job.salary_currency,
+        openings: 1,
+        required_skills: job.required_skills,
+        benefits: [],
+        expires_at: null,
+        external_id: job.external_id,
+        external_url: job.external_url,
+        source: job.source,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return { action: "inserted", id: data.id };
+  }
+}
+
+export async function deactivateStaleImportedJobs(source, currentExternalIds) {
+  const supabase = getSupabase();
+  const { data: stale } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("source", source)
+    .eq("is_active", true)
+    .not("external_id", "in", `(${currentExternalIds.join(",")})`);
+
+  if (!stale || stale.length === 0) return 0;
+
+  const { error } = await supabase
+    .from("jobs")
+    .update({ is_active: false })
+    .in("id", stale.map((j) => j.id));
+  if (error) throw error;
+  return stale.length;
+}
+
 // ── Applications ───────────────────────────────────────
 
 export async function findApplication(jobId, seekerId) {

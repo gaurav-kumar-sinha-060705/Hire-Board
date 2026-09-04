@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function VerifyEmail() {
   const { user, refreshUser, refreshCompany } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/browse";
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,13 +33,15 @@ export default function VerifyEmail() {
     try {
       await api.verifyEmail({ email: user.email, otp });
       const updated = await refreshUser();
-      let next = "/browse";
-      if (updated.role === "seeker") {
-        if (!updated.profile?.headline || !updated.profile?.skills || updated.profile.skills.length === 0) next = "/profile";
-      } else if (updated.role === "recruiter") {
-        const c = await refreshCompany();
-        if (!c) next = "/register-company";
-        else if (!updated.profile?.headline) next = "/profile";
+      let next = redirectTo;
+      if (next === "/browse" || next === "/verify-email") {
+        if (updated.role === "seeker") {
+          if (!updated.profile?.headline || !updated.profile?.skills || updated.profile.skills.length === 0) next = "/profile";
+        } else if (updated.role === "recruiter") {
+          const c = await refreshCompany();
+          if (!c) next = "/register-company";
+          else if (!updated.profile?.headline) next = "/profile";
+        }
       }
       setSuccess(true);
       setTimeout(() => navigate(next, { replace: true }), 2000);
